@@ -32,12 +32,15 @@ class TestSympy_to_c(unittest.TestCase):
 
     def tearDown(self):
         """Tear down test fixtures, if any."""
-        os.system("rm *.so")
+        while sp2c.created_so_files:
+            sofilepath = sp2c.created_so_files.pop()
+            os.remove(sofilepath)
 
     def test_scalar_expression(self):
         """Test something."""
 
-        e1_c_func = sp2c.convert_to_c(self.xx, self.e1, cfilepath="scalar.c")
+        e1_c_func = sp2c.convert_to_c(self.xx, self.e1, cfilepath="scalar.c",
+                                      use_exisiting_so=False)
         e1_l_func = sp.lambdify(self.xx, self.e1)
 
         for xx in self.XX:
@@ -46,7 +49,8 @@ class TestSympy_to_c(unittest.TestCase):
     def test_matrix_expression(self):
         """Test something."""
 
-        M1_c_func = sp2c.convert_to_c(self.xx, self.M1, cfilepath="matrix.c")
+        M1_c_func = sp2c.convert_to_c(self.xx, self.M1, cfilepath="matrix.c",
+                                      use_exisiting_so=False)
         M1_l_func = sp.lambdify(self.xx, self.M1)
 
         for xx in self.XX:

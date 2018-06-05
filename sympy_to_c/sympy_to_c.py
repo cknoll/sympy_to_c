@@ -9,10 +9,16 @@ import numpy as np
 import itertools as it
 import sympy as sp
 from sympy.utilities.codegen import codegen
+import sys
+
+if sys.version_info[0] == 3:
+    basestring = str
 
 from ipydex import IPS  # just for debugging
 
 CLEANUP = True
+
+created_so_files = []
 
 
 def path_of_caller(*paths):
@@ -26,21 +32,24 @@ def _get_c_func_name(base, i, j):
     return "{}_{}_{}".format(base, i, j)
 
 
-def compile_ccode(cfileath):
+def compile_ccode(cfilepath):
 
-    assert cfileath.endswith(".c")
-    objfilepath = "{}.o".format(cfileath[:-2])
-    sofilepath = "{}.so".format(cfileath[:-2])
-    cmd1 = "gcc -c -fPIC -lm {}".format(cfileath)
+    assert cfilepath.endswith(".c")
+    objfilepath = "{}.o".format(cfilepath[:-2])
+    sofilepath = "{}.so".format(cfilepath[:-2])
+    cmd1 = "gcc -c -fPIC -lm {} -o {}".format(cfilepath, objfilepath)
     cmd2 = "gcc -shared {} -o {}".format(objfilepath, sofilepath)
 
     print(cmd1)
-    os.system(cmd1)
+    assert os.system(cmd1) == 0
+
     print("\n\n{}".format(cmd2))
-    os.system(cmd2)
+    assert os.system(cmd2) == 0
+
+    created_so_files.append(sofilepath)
 
     if CLEANUP:
-        os.remove(cfileath)
+        os.remove(cfilepath)
         os.remove(objfilepath)
 
     return sofilepath
