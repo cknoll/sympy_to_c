@@ -26,7 +26,7 @@ Simple library to create importable C-functions from sympy-Expressions
 Features
 --------
 
-* TODO
+* TODO: write docs. (For now, please have a look to the tests)
 
 Credits
 -------

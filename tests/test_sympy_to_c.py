@@ -37,7 +37,7 @@ class TestSympy_to_c(unittest.TestCase):
             os.remove(sofilepath)
 
     def test_scalar_expression(self):
-        """Test something."""
+        """Test conversion of simple scalar expression."""
 
         e1_c_func = sp2c.convert_to_c(self.xx, self.e1, cfilepath="scalar.c",
                                       use_exisiting_so=False)
@@ -47,7 +47,7 @@ class TestSympy_to_c(unittest.TestCase):
             self.assertAlmostEqual(e1_c_func(*xx), e1_l_func(*xx))
 
     def test_matrix_expression(self):
-        """Test something."""
+        """Test conversion of simple matrix."""
 
         M1_c_func = sp2c.convert_to_c(self.xx, self.M1, cfilepath="matrix.c",
                                       use_exisiting_so=False)
