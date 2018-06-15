@@ -57,6 +57,23 @@ class TestSympy_to_c(unittest.TestCase):
             self.assertTrue(np.allclose(M1_c_func(*xx), M1_l_func(*xx)))
 
 
+    def test_meta_data(self):
+
+        # create new so-file
+        sp2c.CLEANUP = False
+        M1_c_func = sp2c.convert_to_c(self.xx, self.M1, cfilepath="matrix.c",
+                                      use_exisiting_so=False)
+
+        md = sp2c.get_meta_data("matrix.c")
+
+        self.assertTrue(isinstance(md, dict))
+        self.assertTrue("fingerprint" in md)
+        self.assertTrue("timestamp" in md)
+
+
+
+
+
 def main():
     unittest.main()
 

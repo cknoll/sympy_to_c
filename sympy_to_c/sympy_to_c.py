@@ -10,6 +10,20 @@ import itertools as it
 import sympy as sp
 from sympy.utilities.codegen import codegen
 import sys
+import pickle
+import hashlib
+import time
+
+
+# handle python2 and python3
+try:
+    from base64 import encodebytes as b64encode
+except ImportError:
+    from base64 import encodestring as b64encode
+try:
+    from base64 import decodebytes as b64decode
+except ImportError:
+    from base64 import decodestring as b64decode
 
 if sys.version_info[0] == 3:
     basestring = str
@@ -19,6 +33,12 @@ from ipydex import IPS  # just for debugging
 CLEANUP = True
 
 created_so_files = []
+
+
+meta_data_template = """
+const char* metadata =
+"{}";
+"""
 
 
 def path_of_caller(*paths):
@@ -63,8 +83,10 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
     :param expr:
     :param basename:
     :param cfilepath:
-    :param use_exisiting_so:    Omits generation of c-code if an .so-file with appropriate name
-                                already exists.
+    :param use_exisiting_so:    either True (fastest), False (most secure) or "smart" (compromise).
+                                Optionally omit the generation of new c-code if an .so-file with
+                                appropriate name (value `True`) or expr-hash (option `"smart"`)
+                                already exists (True).
 
     :return:    python-callable wrapping the respective c-functions
     """
@@ -75,8 +97,7 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
 
     cfilepath = os.path.join(pathprefix, cfilepath)
 
-    assert cfilepath.endswith(".c")
-    sopath = "{}.so".format(cfilepath[:-2])
+    sopath = _get_so_path(cfilepath)
     if isinstance(expr, sp.MatrixBase):
         shape = expr.shape
         expr_matrix = expr
@@ -86,8 +107,18 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
         shape = (1, 1)
         expr_matrix = sp.Matrix([expr])
 
+    # convert expr to pickle-string and calculate the hash
+    # this is faster converting expr to str and then taking the hash
+    pexpr = pickle.dumps(expr_matrix)
+    fingerprint = hashlib.sha256(pexpr).hexdigest()
+    if use_exisiting_so == "smart":
+        pass
+
+    metadata = dict(fingerprint=fingerprint, timestamp=time.strftime(r"%Y-%m-%d-%H-%M-%S"))
+    metadata_s = b64encode(pickle.dumps(metadata))
+
     if not use_exisiting_so or not os.path.isfile(sopath):
-        _generate_ccode(args, expr_matrix, basename, cfilepath, shape)
+        _generate_ccode(args, expr_matrix, basename, cfilepath, shape, md=metadata_s)
 
         sopath = compile_ccode(cfilepath)
 
@@ -98,7 +129,52 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
         return load_matrix_func_from_solib(sopath, basename, expr_matrix.shape, len(args))
 
 
-def _generate_ccode(args, expr_matrix, basename, libname, shape):
+def get_meta_data(cfilepath):
+    """
+    try to load the .so file and try to call the get_meta_data() function. This returns
+    a base64-encoded byte-array of a pickled dict
+
+    :param cfilepath:      path of the c-file (from which the .so file was / would be created)
+    :return: dict with meta data
+    """
+
+    libpath = _get_so_path(cfilepath)
+    # fncname = "get_meta_data"
+
+    lib = _loadlib(libpath)
+
+    try:
+        # load pointers
+        ptr = ct.c_char_p.in_dll(lib, "metadata")
+    except ValueError as err:
+        msg = "The shared object has no stored meta data."
+        raise AttributeError(msg)
+
+    # dereference pointer
+    md_encoded = ptr.value
+    md = pickle.loads(b64decode(md_encoded))
+    assert isinstance(md, dict)
+
+    return md
+
+
+def _get_so_path(cfilepath):
+    assert cfilepath.endswith(".c")
+    sopath = "{}.so".format(cfilepath[:-2])
+    return sopath
+
+
+def _generate_ccode(args, expr_matrix, basename, libname, shape, md=None):
+    """
+
+    :param args:
+    :param expr_matrix:
+    :param basename:
+    :param libname:
+    :param shape:
+    :param md:              Metadata-string
+    :return:
+    """
 
     nr, nc = shape
     # list of index-pairs
@@ -122,27 +198,49 @@ def _generate_ccode(args, expr_matrix, basename, libname, shape):
 
     final_code = "#include <math.h>\n\n{}".format(res)
 
+    if md is not None:
+        md1 = md.decode("ascii")
+        newline = "\n"
+        quoted_newline = '"\n"'
+
+        if md1.endswith(newline):
+            md1 = md1[:-1]
+        md2 = md1.replace(newline, quoted_newline)
+
+        md_var = meta_data_template.format(md2)
+        final_code = "{}\n{}".format(final_code, md_var)
+
     with open(libname, "w") as cfile:
         cfile.write(final_code)
 
 
-def load_func_from_solib(libpath, funcname, nargs):
-    """
-
-    :param libname:
-    :param funcname:
-    :param nargs:       number of float args
-    :return:
-    """
-
+def _loadlib(libpath):
     # ensure that the path prefix is at least "./"
     prefix, name = os.path.split(libpath)
     if prefix == "":
         libpath = os.path.join(".", libpath)
     lib = ct.cdll.LoadLibrary(libpath)
 
+    return lib
+
+
+def load_func_from_solib(libpath, funcname, nargs, raw=False):
+    """
+
+    :param libname:
+    :param funcname:
+    :param raw:         Boolean (default: `False`) return the unwrapped c-function
+    :param nargs:       number of float args
+    :return:
+    """
+
+    lib = _loadlib(libpath)
+
     # TODO: throw exception on failure
     the_c_func = getattr(lib, funcname)
+
+    if raw:
+        return the_c_func
 
     # this converts the result in a python float obj:
     the_c_func.restype = ct.c_double
