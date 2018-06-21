@@ -10,9 +10,10 @@ import itertools as it
 import sympy as sp
 from sympy.utilities.codegen import codegen
 import sys
+# import dill as pickle
 import pickle
 import hashlib
-import time
+import datetime
 
 
 # handle python2 and python3
@@ -111,22 +112,50 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
     # this is faster converting expr to str and then taking the hash
     pexpr = pickle.dumps(expr_matrix)
     fingerprint = hashlib.sha256(pexpr).hexdigest()
+    print(expr_matrix)
+    print ("fingerprint:\n", fingerprint)
     if use_exisiting_so == "smart":
-        pass
+        md = get_meta_data(cfilepath)
+        if md["fingerprint"] == fingerprint:
+            use_exisiting_so = True
+        else:
+            print("Fingerprints of expression do not match.\n"
+            "Regeneration of shared object.")
+            use_exisiting_so = False
 
-    metadata = dict(fingerprint=fingerprint, timestamp=time.strftime(r"%Y-%m-%d-%H-%M-%S"))
+    if use_exisiting_so:
+        if not os.path.isfile(sopath):
+            print("Could not find {}. Create and compile new c-code.".format(sopath))
+        else:
+            res = load_func(sopath, basename, scalar_flag, expr_matrix.shape, len(args))
+            res.reused_c_code = True
+            return res
+
+    metadata = dict(fingerprint=fingerprint,
+                    timestamp=datetime.datetime.now().strftime(r"%Y-%m-%d-%H-%M-%S.%f"),
+                    nargs=len(args),
+                    pexpr=pexpr,
+                    expr=expr_matrix)
     metadata_s = b64encode(pickle.dumps(metadata))
 
-    if not use_exisiting_so or not os.path.isfile(sopath):
-        _generate_ccode(args, expr_matrix, basename, cfilepath, shape, md=metadata_s)
+    print(hashlib.sha256(pickle.dumps(expr_matrix)).hexdigest())
 
-        sopath = compile_ccode(cfilepath)
+    _generate_ccode(args, expr_matrix, basename, cfilepath, shape, md=metadata_s)
 
+    print(hashlib.sha256(pickle.dumps(expr_matrix)).hexdigest())
+
+    sopath = compile_ccode(cfilepath)
+    res = load_func(sopath, basename, scalar_flag, expr_matrix.shape, len(args))
+    res.reused_c_code = False
+    return res
+
+
+def load_func(sopath, basename, scalar_flag, shape, nargs):
     if scalar_flag:
         funcname = _get_c_func_name(basename, 0, 0)
-        return load_func_from_solib(sopath, funcname, len(args))
+        return load_func_from_solib(sopath, funcname, nargs)
     else:
-        return load_matrix_func_from_solib(sopath, basename, expr_matrix.shape, len(args))
+        return load_matrix_func_from_solib(sopath, basename, shape, nargs)
 
 
 def get_meta_data(cfilepath):
@@ -186,8 +215,10 @@ def _generate_ccode(args, expr_matrix, basename, libname, shape, md=None):
 
         partfuncname = _get_c_func_name(basename, i, j)
 
+        print(hashlib.sha256(pickle.dumps(expr_matrix)).hexdigest(), i, j)
         c_res = codegen( (partfuncname, tmp_expr), "C", "test",
                          header=False, empty=False, argument_sequence=args)
+        print(hashlib.sha256(pickle.dumps(expr_matrix)).hexdigest(), i, j)
         [(c_name, ccode), (h_name, c_header)] = c_res
 
         ccode = "\n".join(line for line in ccode.split("\n") if not line.startswith("#include"))
@@ -197,6 +228,8 @@ def _generate_ccode(args, expr_matrix, basename, libname, shape, md=None):
     res = "\n\n".join(ccode_list)
 
     final_code = "#include <math.h>\n\n{}".format(res)
+
+    print(hashlib.sha256(pickle.dumps(expr_matrix)).hexdigest())
 
     if md is not None:
         md1 = md.decode("ascii")
@@ -209,6 +242,7 @@ def _generate_ccode(args, expr_matrix, basename, libname, shape, md=None):
 
         md_var = meta_data_template.format(md2)
         final_code = "{}\n{}".format(final_code, md_var)
+    print(hashlib.sha256(pickle.dumps(expr_matrix)).hexdigest())
 
     with open(libname, "w") as cfile:
         cfile.write(final_code)
@@ -279,7 +313,9 @@ def load_matrix_func_from_solib(libname, basename, shape, nargs):
         M_func_list.append(load_func_from_solib(libname, funcname, nargs))
 
     def M_func(*args):
-        assert len(args) == nargs
+        if not len(args) == nargs:
+            msg = "invalid number of args. Got {}, but expected {}".format(len(args), nargs)
+            raise ValueError(msg)
         return np.r_[ [f(*args) for f in M_func_list] ].reshape(shape)
 
     return M_func
