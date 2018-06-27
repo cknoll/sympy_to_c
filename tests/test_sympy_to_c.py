@@ -12,6 +12,7 @@ import sys
 import hashlib
 import pickle
 import copy
+import time
 
 from ipydex import IPS
 
@@ -29,7 +30,7 @@ class TestSympy_to_c(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures, if any."""
-        x1, x2, x3 = self.xx = sp.symbols("x1, x2, x3")
+        x1, x2, x3 = self.xx = sp.symbols("x1, x2, x3", complex=False, finite=True)
 
         self.e1 = x1*x2 + x3
 
@@ -41,8 +42,12 @@ class TestSympy_to_c(unittest.TestCase):
 
     def tearDown(self):
         """Tear down test fixtures, if any."""
+
+        sp2c.unload_all_libs()
+
         while sp2c.created_so_files:
             sofilepath = sp2c.created_so_files.pop()
+            print("deleting", sofilepath)
             os.remove(sofilepath)
 
     def test_scalar_expression(self):
@@ -69,7 +74,7 @@ class TestSympy_to_c(unittest.TestCase):
     def test_meta_data(self):
 
         # create new so-file
-        sp2c.CLEANUP = False
+        # sp2c.CLEANUP = False
         M1_c_func = sp2c.convert_to_c(self.xx, self.M1, cfilepath="matrix.c",
                                       use_exisiting_so=False)
 
@@ -82,6 +87,7 @@ class TestSympy_to_c(unittest.TestCase):
 
         self.assertEqual(md["nargs"], len(self.xx))
 
+    @unittest.skip
     @unittest.expectedFailure
     def test_hashing1(self):
 
@@ -92,8 +98,6 @@ class TestSympy_to_c(unittest.TestCase):
         h1 = hashlib.sha256(pickle.dumps(e1)).hexdigest()
         M1_1 = self.M1.copy()
         h2 = hashlib.sha256(pickle.dumps(e1)).hexdigest()
-
-
 
         from sympy.utilities.codegen import codegen
 
@@ -143,109 +147,33 @@ class TestSympy_to_c(unittest.TestCase):
         # print("\n".join([h1a, h1b, h1c, h2a, h2b, h2c, h3]))
         print("\n".join([h1a, h2a,]))
 
-        # IPS()
+    def test_hashing3(self):
+        from sympy.utilities.codegen import codegen
 
+        h1 = hashlib.sha256(pickle.dumps(self.xx)).hexdigest()
+        s1 = pickle.dumps(self.xx[0])
 
-    # @unittest.expectedFailure
-    def test_use_existing_old(self):
+        res = codegen(("M1_00", self.xx[0]*0), "C", "M1_00", argument_sequence=self.xx)
+        s2 = pickle.dumps(self.xx[0])
 
-        # avoid some strange interation between pickle and sympy
-        M1_1 = self.M1.copy()
-        M1_2 = self.M1.copy()
-        M1_3 = self.M1.copy()
-        M1_4 = self.M1.copy()
+        h2 = hashlib.sha256(pickle.dumps(self.xx)).hexdigest()
 
-        xx1 = copy.deepcopy(self.xx)
-        xx2 = copy.deepcopy(self.xx)
-        xx3 = copy.deepcopy(self.xx)
-        xx4 = copy.deepcopy(self.xx)
+        # this fails if we did not set special assumptions during symbol creation
+        # see https://github.com/sympy/sympy/issues/14808
 
+        self.assertEqual(h1, h2)
 
-        """
-        For some currently unknown reason the pickle-representation of some sympy objects
-        changes after they are copied or after they are put into convert_to_c
-        
-        """
-
-        # create new so-file
-        sp2c.CLEANUP = False
-
-        # print(hashlib.sha256(pickle.dumps(xx1)).hexdigest())
-        M1_c_func = sp2c.convert_to_c(xx1, M1_1, cfilepath="matrix.c",
-                                      use_exisiting_so=False)
-
-        # other expression but no new c-Code
-        M2_c_func = sp2c.convert_to_c(xx2, M1_2*0, cfilepath="matrix.c",
-                                      use_exisiting_so=True)
-
-        self.assertTrue(M2_c_func.reused_c_code)
-
-        # test that result is the same
-        args = (1702, 123, -12.34)
-        r1 = M1_c_func(*args).flatten()
-        r2 = M2_c_func(*args).flatten()
-        for i in range(len(self.M1)):
-            self.assertEqual(r1[i], r2[i])
-
-        ts2 = sp2c.get_meta_data("matrix.c")["timestamp"]
-
-        # same expression -> no new code
-        print(3)
-        input(3)
-        M3_c_func = sp2c.convert_to_c(xx3, M1_3, cfilepath="matrix.c",
-                                      use_exisiting_so="smart")
-
-        ts3 = sp2c.get_meta_data("matrix.c")["timestamp"]
-        if 0:
-            # this should work
-            self.assertTrue(M3_c_func.reused_c_code)
-
-            self.assertEqual(ts2, ts3)
-
-        input(4)
-
-        M4_c_func = sp2c.convert_to_c(xx4, M1_4*0, cfilepath="matrix.c",
-                                      use_exisiting_so="smart")
-
-        self.assertFalse(M4_c_func.reused_c_code)
-
-        ts4 = sp2c.get_meta_data("matrix.c")["timestamp"]
-        self.assertNotEqual(ts3, ts4)
-
-        r4 = M4_c_func(*args).flatten()
-        for i in range(len(self.M1)):
-            self.assertEqual(r4[i], 0)
-
-    # @unittest.expectedFailure
     def test_use_existing(self):
 
-        # avoid some strange interation between pickle and sympy
-        M1_1 = self.M1.copy()
-        M1_2 = self.M1.copy()
-        M1_3 = self.M1.copy()
-        M1_4 = self.M1.copy()
-
-        xx1 = copy.deepcopy(self.xx)
-        xx2 = copy.deepcopy(self.xx)
-        xx3 = copy.deepcopy(self.xx)
-        xx4 = copy.deepcopy(self.xx)
-
-
-        """
-        For some currently unknown reason the pickle-representation of some sympy objects
-        changes after they are copied or after they are put into convert_to_c
-        
-        """
-
         # create new so-file
         sp2c.CLEANUP = False
 
-        # print(hashlib.sha256(pickle.dumps(xx1)).hexdigest())
-        M1_c_func = sp2c.convert_to_c(xx1, M1_1, cfilepath="matrix.c",
+        M1_c_func = sp2c.convert_to_c(self.xx, self.M1, cfilepath="matrix.c",
                                       use_exisiting_so=False)
 
         # other expression but no new c-Code
-        M2_c_func = sp2c.convert_to_c(xx2, M1_2*0, cfilepath="matrix.c",
+        print("\n", "other expression but no new c-Code")
+        M2_c_func = sp2c.convert_to_c(self.xx, self.M1*0, cfilepath="matrix.c",
                                       use_exisiting_so=True)
 
         self.assertTrue(M2_c_func.reused_c_code)
@@ -260,28 +188,34 @@ class TestSympy_to_c(unittest.TestCase):
         ts2 = sp2c.get_meta_data("matrix.c")["timestamp"]
 
         # same expression -> no new code
-        print(3)
-        input(3)
-        M3_c_func = sp2c.convert_to_c(xx3, M1_3, cfilepath="matrix.c",
+        print("\n", " same expression -> no new code")
+        M3_c_func = sp2c.convert_to_c(self.xx, self.M1, cfilepath="matrix.c",
                                       use_exisiting_so="smart")
 
         ts3 = sp2c.get_meta_data("matrix.c")["timestamp"]
-        if 0:
-            # this should work
-            self.assertTrue(M3_c_func.reused_c_code)
 
-            self.assertEqual(ts2, ts3)
+        md3 = sp2c.get_meta_data("matrix.c")
 
-        input(4)
+        # this should work
+        self.assertTrue(M3_c_func.reused_c_code)
 
-        M4_c_func = sp2c.convert_to_c(xx4, M1_4*0, cfilepath="matrix.c",
+        self.assertEqual(ts2, ts3)
+
+        print("\n", " different expression -> new code -> new_load")
+        M4_c_func = sp2c.convert_to_c(self.xx, self.M1*0, cfilepath="matrix.c",
                                       use_exisiting_so="smart")
 
         self.assertFalse(M4_c_func.reused_c_code)
 
         ts4 = sp2c.get_meta_data("matrix.c")["timestamp"]
+
+        md4 = sp2c.get_meta_data("matrix.c")
+
+        # IPS()
+
         self.assertNotEqual(ts3, ts4)
 
+        print("call")
         r4 = M4_c_func(*args).flatten()
         for i in range(len(self.M1)):
             self.assertEqual(r4[i], 0)
