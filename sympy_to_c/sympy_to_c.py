@@ -36,9 +36,15 @@ CLEANUP = True
 # serves e.g. to remove all created so-files in the tests
 created_so_files = []
 
-# keep track which so-files have been already been loaded to enable force_reload_lib()
+# keep track of which so-files have been already been loaded to enable force_reload_lib()
 # format: {"<so-path>": handle}
 loaded_so_files = {}
+
+# keep track of which attributes of which objects have been replaced
+# (see _enable_reproducible_pickle_repr_for_expr)
+# key: object; value: (attribute_name, original object)
+replaced_attributes = {}
+
 
 # create a function to unload a lib
 # this is from https://stackoverflow.com/a/50986803/333403
@@ -428,7 +434,8 @@ def _dict_to_ordered_dict(thedict):
 
 def _enable_reproducible_pickle_repr_for_expr(expr):
     """
-    Convert all attributes which are dicts to OrderedDict. See explanation above.
+    Convert all attributes which are dicts to OrderedDict. (See motivation above).
+    Store the original objects for later recovery.
 
     :param expr:
     :return:        None
@@ -455,6 +462,20 @@ def _enable_reproducible_pickle_repr_for_expr(expr):
             setattr(expr, dictname, newordereddict)
         except AttributeError as aerr:
             pass
+        else:
+            replaced_attributes[expr] = (dictname, thedict)
+
+
+def _rewind_all_dict_replacements():
+    """
+    This function serves to reset all objects which where chaged by
+    _reproducible_pickle_repr_for_expr() in their original state
+
+    :return:
+    """
+
+    for object, (attrname, original) in replaced_attributes.items():
+        setattr(object, attrname, original)
 
 
 def reproducible_pickle_repr(expr):
@@ -464,14 +485,19 @@ def reproducible_pickle_repr(expr):
     :return:        byte-array (result of pickle.dumps)
     """
 
+    assert len(replaced_attributes) == 0
+
     symbols = expr.atoms(sp.Symbol)
     # _enable_reproducible_pickle_repr_for_expr(expr)
 
     for s in symbols:
         _enable_reproducible_pickle_repr_for_expr(s)
 
+    pickle_dump = pickle.dumps(expr)
 
-    return pickle.dumps(expr)
+    _rewind_all_dict_replacements()
+
+    return pickle_dump
 
 
 def reproducible_fast_hash(expr):
