@@ -163,6 +163,24 @@ class TestSympy_to_c(unittest.TestCase):
 
         self.assertEqual(h1, h2)
 
+    def test_reproducible_fast_hash(self):
+        """
+
+        :return:
+        """
+
+        # TODO: this test should incorporate multiple runs from the python-interpreter
+        # to ensure reproducibility
+
+        h1 = sp2c.reproducible_fast_hash([self.M1, self.e1])
+        h2 = sp2c.reproducible_fast_hash([self.M1, self.e1])
+
+        print(sp2c.reproducible_fast_hash(self.M1))
+        print(sp2c.reproducible_fast_hash(self.e1))
+
+        self.assertEqual(h1, h2)
+        print("This should be the same in every run: {}".format(h1))
+
     def test_use_existing(self):
 
         # create new so-file

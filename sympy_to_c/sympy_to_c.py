@@ -28,6 +28,7 @@ except ImportError:
 
 if sys.version_info[0] == 3:
     basestring = str
+    FileNotFoundError = IOError
 
 from ipydex import IPS  # just for debugging
 
@@ -291,7 +292,10 @@ def _loadlib(libpath):
     if libpath in loaded_so_files:
         lib = loaded_so_files[libpath]
     else:
-        lib = ct.cdll.LoadLibrary(libpath)
+        try:
+            lib = ct.cdll.LoadLibrary(libpath)
+        except OSError as oerr:
+            raise FileNotFoundError(oerr.args[0])
         loaded_so_files[libpath] = lib
         print("loading ", libpath)
     return lib
@@ -474,8 +478,10 @@ def _rewind_all_dict_replacements():
     :return:
     """
 
-    for object, (attrname, original) in replaced_attributes.items():
+    for object, (attrname, original) in list(replaced_attributes.items()):
         setattr(object, attrname, original)
+
+        replaced_attributes.pop(object)
 
 
 def reproducible_pickle_repr(expr):
@@ -503,9 +509,12 @@ def reproducible_pickle_repr(expr):
 def reproducible_fast_hash(expr):
     """
 
-    :param expr:    sympy expression
+    :param expr:    sympy expression or list of sympy expressions
     :return:        hash-digest (aka fingerprint)
     """
 
-    pklrepr = reproducible_pickle_repr(expr)
+    if isinstance(expr, (list, tuple)):
+        pklrepr = b"\n\n".join([reproducible_pickle_repr(e) for e in expr])
+    else:
+        pklrepr = reproducible_pickle_repr(expr)
     return hashlib.sha256(pklrepr).hexdigest()
