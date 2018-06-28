@@ -493,6 +493,11 @@ def reproducible_pickle_repr(expr):
 
     assert len(replaced_attributes) == 0
 
+    assert isinstance(expr, (sp.Basic, sp.MatrixBase))
+
+    if isinstance(expr, sp.MatrixBase):
+        expr = sp.ImmutableDenseMatrix(expr)
+
     symbols = expr.atoms(sp.Symbol)
     # _enable_reproducible_pickle_repr_for_expr(expr)
 
