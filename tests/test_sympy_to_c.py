@@ -91,9 +91,10 @@ class TestSympy_to_c(unittest.TestCase):
     @unittest.expectedFailure
     def test_hashing1(self):
 
+        # this test is related to https://github.com/sympy/sympy/issues/14808
+
         # e1 = self.M1[0]
         e1 = sp.symbols("x1")
-        # print(pickle.dumps(e1))
 
         h1 = hashlib.sha256(pickle.dumps(e1)).hexdigest()
         M1_1 = self.M1.copy()
@@ -101,7 +102,7 @@ class TestSympy_to_c(unittest.TestCase):
 
         from sympy.utilities.codegen import codegen
 
-        print(hashlib.sha256(pickle.dumps(e1)).hexdigest())
+        # print(hashlib.sha256(pickle.dumps(e1)).hexdigest())
 
         if 0:
             M1_c_func = sp2c.convert_to_c(self.xx, e1, cfilepath="matrix.c",
@@ -112,40 +113,10 @@ class TestSympy_to_c(unittest.TestCase):
             codegen(("M1_00", e1), "C", "test",
                              header=False, empty=False, argument_sequence=self.xx)
 
-        # print("..")
-        # print(pickle.dumps(e1))
-
         h3 = hashlib.sha256(pickle.dumps(e1)).hexdigest()
 
         self.assertEqual(h1, h2)
         self.assertEqual(h1, h3)
-
-    def test_hashing2(self):
-
-        e1 = sp.symbols("x1", integer=False)
-        e2 = copy.deepcopy(e1)
-        e3 = sp.Symbol(e1.name, **e1._assumptions)
-
-        xx_a = [e1]
-
-        h1a = hashlib.sha256(pickle.dumps(e1)).hexdigest()
-        # h1b = hashlib.sha256(pickle.dumps(e2)).hexdigest()
-        # h1c = hashlib.sha256(pickle.dumps(e3)).hexdigest()
-
-        from sympy.utilities.codegen import codegen
-        codegen(("M1_00", e1), "F95", "M1_00",
-               header=False, empty=False, argument_sequence=xx_a)
-
-        h2a = hashlib.sha256(pickle.dumps(e1)).hexdigest()
-        # h2b = hashlib.sha256(pickle.dumps(e2)).hexdigest()
-        # h2c = hashlib.sha256(pickle.dumps(e3)).hexdigest()
-
-        w1 = sp.Symbol(e1.name, **e1.assumptions0)
-        h3 = hashlib.sha256(pickle.dumps(w1)).hexdigest()
-
-
-        # print("\n".join([h1a, h1b, h1c, h2a, h2b, h2c, h3]))
-        print("\n".join([h1a, h2a,]))
 
     def test_hashing3(self):
         from sympy.utilities.codegen import codegen
@@ -174,9 +145,6 @@ class TestSympy_to_c(unittest.TestCase):
 
         h1 = sp2c.reproducible_fast_hash([self.M1, self.e1])
         h2 = sp2c.reproducible_fast_hash([self.M1, self.e1])
-
-        print(sp2c.reproducible_fast_hash(self.M1))
-        print(sp2c.reproducible_fast_hash(self.e1))
 
         self.assertEqual(h1, h2)
         print("This should be the same in every run: {}".format(h1))
@@ -229,11 +197,8 @@ class TestSympy_to_c(unittest.TestCase):
 
         md4 = sp2c.get_meta_data("matrix.c")
 
-        # IPS()
-
         self.assertNotEqual(ts3, ts4)
 
-        print("call")
         r4 = M4_c_func(*args).flatten()
         for i in range(len(self.M1)):
             self.assertEqual(r4[i], 0)
