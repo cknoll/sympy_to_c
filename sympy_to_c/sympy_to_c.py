@@ -28,7 +28,9 @@ except ImportError:
 
 if sys.version_info[0] == 3:
     basestring = str
-    FileNotFoundError = IOError
+
+if sys.version_info[0] == 2:
+        FileNotFoundError = IOError
 
 from ipydex import IPS  # just for debugging
 
@@ -153,7 +155,7 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
         if not os.path.isfile(sopath):
             print("Could not find {}. Create and compile new c-code.".format(sopath))
         else:
-            res = load_func(sopath, basename, scalar_flag, expr_matrix.shape, len(args))
+            res = load_func(sopath)
             res.reused_c_code = True
             return res
 
@@ -162,8 +164,10 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
         fingerprint=fingerprint,
         timestamp=datetime.datetime.now().strftime(r"%Y-%m-%d-%H-%M-%S.%f"),
         nargs=len(args),
-        # pexpr=pexpr,
-        expr=expr_matrix)
+        # expr=expr_matrix,
+        scalar_flag=scalar_flag,
+        shape=expr_matrix.shape
+    )
 
     if additional_metadata is None:
         additional_metadata = {}
@@ -180,12 +184,24 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
         # again ensure to use actual information
         unload_lib(sopath)
         _loadlib(sopath)
-    res = load_func(sopath, basename, scalar_flag, expr_matrix.shape, len(args))
+    res = load_func(sopath)
     res.reused_c_code = False
     return res
 
 
-def load_func(sopath, basename, scalar_flag, shape, nargs):
+def load_func(sopath, basename=None, scalar_flag=None, shape=None, nargs=None):
+
+    md = get_meta_data(sopath)
+
+    if basename is None:
+        basename = "expr"
+    if scalar_flag is None:
+        scalar_flag = md["scalar_flag"]
+    if shape is None:
+        shape = md["shape"]
+    if nargs is None:
+        nargs = md["nargs"]
+
     if scalar_flag:
         funcname = _get_c_func_name(basename, 0, 0)
         return load_func_from_solib(sopath, funcname, nargs)
@@ -193,19 +209,22 @@ def load_func(sopath, basename, scalar_flag, shape, nargs):
         return load_matrix_func_from_solib(sopath, basename, shape, nargs)
 
 
-def get_meta_data(cfilepath, reload_lib=False):
+def get_meta_data(libpath, reload_lib=False):
     """
     try to load the .so file and try to call the get_meta_data() function. This returns
     a base64-encoded byte-array of a pickled dict
 
-    :param cfilepath:      path of the c-file (from which the .so file was / would be created)
+    :param libpath:        path of the .so- or c-file (from which the .so file was created)
     :param reload_lib:     flag that dertmines whether to reload the lib (this might break
                            references and lead to segfaults)
 
     :return: dict with meta data
     """
 
-    libpath = _get_so_path(cfilepath)
+    if not libpath.endswith(".so"):
+        libpath = _get_so_path(libpath)
+    else:
+        libpath = ensure_valid_libpath(libpath)
 
     # be sure to load the actual metadata
     if reload_lib and (libpath in loaded_so_files):
