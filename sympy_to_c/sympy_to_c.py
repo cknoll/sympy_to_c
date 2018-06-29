@@ -98,7 +98,7 @@ def compile_ccode(cfilepath):
 
 
 def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=None,
-                 use_exisiting_so=True):
+                 use_exisiting_so=True, additional_metadata=None):
     """
 
     :param args:
@@ -109,6 +109,8 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
                                 Optionally omit the generation of new c-code if an .so-file with
                                 appropriate name (value `True`) or expr-hash (option `"smart"`)
                                 already exists (True).
+    :param additional_metadata: None or dict. Content will be stored inside the base64-coded
+                                metadata
 
     :return:    python-callable wrapping the respective c-functions
     """
@@ -162,6 +164,11 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
         nargs=len(args),
         # pexpr=pexpr,
         expr=expr_matrix)
+
+    if additional_metadata is None:
+        additional_metadata = {}
+    assert not set(metadata.keys()).intersection(additional_metadata.keys())
+    metadata.update(_dict_to_ordered_dict(additional_metadata))
     metadata_s = b64encode(pickle.dumps(metadata))
 
     _generate_ccode(args, expr_matrix, basename, cfilepath, shape, md=metadata_s)

@@ -73,10 +73,10 @@ class TestSympy_to_c(unittest.TestCase):
 
     def test_meta_data(self):
 
-        # create new so-file
-        # sp2c.CLEANUP = False
+        # additional metadata
+        amd = dict(fnordskol=23.42)
         M1_c_func = sp2c.convert_to_c(self.xx, self.M1, cfilepath="matrix.c",
-                                      use_exisiting_so=False)
+                                      use_exisiting_so=False, additional_metadata=amd)
 
         md = sp2c.get_meta_data("matrix.c")
 
@@ -86,6 +86,7 @@ class TestSympy_to_c(unittest.TestCase):
         self.assertTrue("nargs" in md)
 
         self.assertEqual(md["nargs"], len(self.xx))
+        self.assertEqual(md["fnordskol"], 23.42)
 
     @unittest.skip
     @unittest.expectedFailure
