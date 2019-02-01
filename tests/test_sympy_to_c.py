@@ -70,23 +70,36 @@ class TestSympy_to_c(unittest.TestCase):
         for xx in self.XX:
             self.assertTrue(np.allclose(M1_c_func(*xx), M1_l_func(*xx)))
 
-
     def test_meta_data(self):
+        """
+        Background:
+        convert_to_c can store almost arbitrary data inside the shared library in form of a base64 encoded dict.
+        """
 
         # additional metadata
         amd = dict(fnordskol=23.42)
         M1_c_func = sp2c.convert_to_c(self.xx, self.M1, cfilepath="matrix.c",
                                       use_exisiting_so=False, additional_metadata=amd)
 
-        md = sp2c.get_meta_data("matrix.c")
+        # get metadate directly
+        md = M1_c_func.metadata
+
+        # load metadata from library (e.g. from a different program)
+        md2 = sp2c.get_meta_data("matrix.c")
+
+        # the dicts must be equal but not be identical
+        assert md == md2
+        assert md is not md2
 
         self.assertTrue(isinstance(md, dict))
         self.assertTrue("fingerprint" in md)
         self.assertTrue("timestamp" in md)
         self.assertTrue("nargs" in md)
+        self.assertTrue("args" in md)
 
         self.assertEqual(md["nargs"], len(self.xx))
         self.assertEqual(md["fnordskol"], 23.42)
+        self.assertEqual(md["args"], self.xx)
 
     @unittest.skip
     @unittest.expectedFailure

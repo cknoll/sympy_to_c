@@ -164,6 +164,7 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
         fingerprint=fingerprint,
         timestamp=datetime.datetime.now().strftime(r"%Y-%m-%d-%H-%M-%S.%f"),
         nargs=len(args),
+        args=args,
         # expr=expr_matrix,
         scalar_flag=scalar_flag,
         shape=expr_matrix.shape
@@ -186,6 +187,7 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
         _loadlib(sopath)
     res = load_func(sopath)
     res.reused_c_code = False
+    res.metadata = metadata
     return res
 
 
