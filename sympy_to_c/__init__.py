@@ -2,6 +2,7 @@
 
 """Top-level package for sympy to c."""
 
-__author__ = """Carsten Knoll"""
-__email__ = 'carsten.knoll@poste.de'
-__version__ = '0.1.0'
+from .core import convert_to_c, get_meta_data, unload_lib, unload_all_libs, created_so_files,\
+    reproducible_fast_hash
+
+__version__ = '0.1.1'

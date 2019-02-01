@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+"""
+Created 2018-06-04 18:16:30 (based on older code)
+@author: Carsten Knoll (enhancements)
+"""
+
 from __future__ import print_function
 
 import ctypes as ct
@@ -30,9 +35,13 @@ if sys.version_info[0] == 3:
     basestring = str
 
 if sys.version_info[0] == 2:
+        # noinspection PyShadowingBuiltins
         FileNotFoundError = IOError
-
-from ipydex import IPS  # just for debugging
+try:
+    from ipydex import IPS  # just for debugging
+except ImportError:
+    # noinspection PyPep8Naming
+    def IPS(): pass
 
 CLEANUP = True
 
@@ -107,6 +116,7 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
     :param expr:
     :param basename:
     :param cfilepath:
+    :param pathprefix:
     :param use_exisiting_so:    either True (fastest), False (most secure) or "smart" (compromise).
                                 Optionally omit the generation of new c-code if an .so-file with
                                 appropriate name (value `True`) or expr-hash (option `"smart"`)
@@ -337,8 +347,9 @@ def unload_lib(libpath):
         raise ValueError(msg)
 
     else:
+        # noinspection PyProtectedMember
         handle = loaded_so_files.get(libpath)._handle
-        ret1 = dlclose_func(handle)
+        _ = dlclose_func(handle)
 
         loaded_so_files.pop(libpath)
 
@@ -351,7 +362,7 @@ def unload_all_libs():
 def load_func_from_solib(libpath, funcname, nargs, raw=False):
     """
 
-    :param libname:
+    :param libpath:
     :param funcname:
     :param raw:         Boolean (default: `False`) return the unwrapped c-function
     :param nargs:       number of float args
@@ -426,6 +437,7 @@ def _find_dicts_in_obj(obj):
     if not hasattr(sp, "_obj_dict_attrbs"):
         sp._obj_dict_attrbs = dict()
 
+    # noinspection PyUnresolvedReferences, PyProtectedMember
     res = sp._obj_dict_attrbs.get(type(obj))
 
     if res is not None:
@@ -448,6 +460,7 @@ def _find_dicts_in_obj(obj):
             pass
 
     # set the cache
+    # noinspection PyUnresolvedReferences, PyProtectedMember
     sp._obj_dict_attrbs[type(obj)] = all_dicts
 
     return all_dicts
@@ -490,6 +503,7 @@ def _enable_reproducible_pickle_repr_for_expr(expr):
             newordereddict = _dict_to_ordered_dict(thedict)
         except ValueError:
             IPS()
+            raise SystemExit
         try:
             setattr(expr, dictname, newordereddict)
         except AttributeError as aerr:
@@ -506,6 +520,7 @@ def _rewind_all_dict_replacements():
     :return:
     """
 
+    # noinspection PyShadowingBuiltins
     for object, (attrname, original) in list(replaced_attributes.items()):
         setattr(object, attrname, original)
 

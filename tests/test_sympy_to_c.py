@@ -6,17 +6,20 @@
 
 import unittest
 import sympy as sp
+from sympy.utilities.codegen import codegen
 import numpy as np
 import os
 import sys
 import hashlib
 import pickle
-import copy
-import time
 
-from ipydex import IPS
+try:
+    # this is handy for debugging but otherwise not needed
+    from ipydex import IPS
+except ImportError:
+    pass
 
-from sympy_to_c import sympy_to_c as sp2c
+import sympy_to_c as sp2c
 
 if sys.version_info[0] == 2:
     input = raw_input
@@ -114,18 +117,8 @@ class TestSympy_to_c(unittest.TestCase):
         M1_1 = self.M1.copy()
         h2 = hashlib.sha256(pickle.dumps(e1)).hexdigest()
 
-        from sympy.utilities.codegen import codegen
-
-        # print(hashlib.sha256(pickle.dumps(e1)).hexdigest())
-
-        if 0:
-            M1_c_func = sp2c.convert_to_c(self.xx, e1, cfilepath="matrix.c",
-                                          use_exisiting_so=False)
-        else:
-
-            # this call changes something in the pickle representation
-            codegen(("M1_00", e1), "C", "test",
-                             header=False, empty=False, argument_sequence=self.xx)
+        # this call changes something in the pickle representation
+        codegen(("M1_00", e1), "C", "test", header=False, empty=False, argument_sequence=self.xx)
 
         h3 = hashlib.sha256(pickle.dumps(e1)).hexdigest()
 
@@ -133,7 +126,6 @@ class TestSympy_to_c(unittest.TestCase):
         self.assertEqual(h1, h3)
 
     def test_hashing3(self):
-        from sympy.utilities.codegen import codegen
 
         h1 = hashlib.sha256(pickle.dumps(self.xx)).hexdigest()
         s1 = pickle.dumps(self.xx[0])

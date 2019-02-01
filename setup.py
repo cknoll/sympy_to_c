@@ -3,6 +3,8 @@
 
 """The setup script."""
 
+import sympy_to_c
+
 from setuptools import setup, find_packages
 
 with open('README.rst') as readme_file:
@@ -22,7 +24,7 @@ setup(
     author="Carsten Knoll",
     author_email='carsten.knoll@poste.de',
     classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
         'Natural Language :: English',
@@ -45,6 +47,6 @@ setup(
     test_suite='tests',
     tests_require=test_requirements,
     url='https://github.com/cknoll/sympy_to_c',
-    version='0.1.0',
+    version=sympy_to_c.__version__,
     zip_safe=False,
 )
