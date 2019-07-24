@@ -181,6 +181,10 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
 
     _generate_ccode(args, expr_matrix, basename, cfilepath, shape, md=metadata_s)
 
+    # We potentially need to unload before we compile, because otherwise the file is locked
+    if sopath in loaded_so_files:
+        unload_lib(sopath)
+
     sopath = compile_ccode(cfilepath)
     sopath = ensure_valid_libpath(sopath)
 
