@@ -314,6 +314,8 @@ def ensure_valid_libpath(libpath):
     prefix, name = os.path.split(libpath)
     if prefix == "":
         libpath = os.path.join(".", libpath)
+
+    libpath = os.path.abspath(libpath)
     return libpath
 
 
