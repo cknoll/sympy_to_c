@@ -330,11 +330,11 @@ def _loadlib(libpath):
         lib = loaded_so_files[libpath]
     else:
         try:
+            print("loading ", libpath)
             lib = ct.cdll.LoadLibrary(libpath)
         except OSError as oerr:
             raise FileNotFoundError(oerr.args[0])
         loaded_so_files[libpath] = lib
-        print("loading ", libpath)
     return lib
 
 
