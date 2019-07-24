@@ -57,13 +57,6 @@ loaded_so_files = {}
 # key: object; value: (attribute_name, original object)
 replaced_attributes = {}
 
-
-# create a function to unload a lib
-# this is from https://stackoverflow.com/a/50986803/333403
-dlclose_func = ct.CDLL(None).dlclose
-dlclose_func.argtypes = [ct.c_void_p]
-dlclose_func.restype = ct.c_int
-
 meta_data_template = """
 const char* metadata =
 "{}";
@@ -348,10 +341,14 @@ def unload_lib(libpath):
 
     else:
         # noinspection PyProtectedMember
-        handle = loaded_so_files.get(libpath)._handle
-        _ = dlclose_func(handle)
+        lib = loaded_so_files.pop(libpath)
+        handle = lib._handle
+        del lib
 
-        loaded_so_files.pop(libpath)
+        if os.name == 'posix':
+            ct.CDLL('libdl.so').dlclose(handle)
+        elif os.name == 'nt':
+            ct.windll.kernel32.FreeLibrary(handle)
 
 
 def unload_all_libs():
