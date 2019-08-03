@@ -43,3 +43,8 @@ import os
 
 os.environ['PATH'] += os.pathsep + r"[YOUR_MINGW_PATH]\mingw64\bin"
 ```
+
+### Testing the installation
+
+You can test if you installed everything correctly by trying to execute
+`windows_example.py`.
