@@ -76,7 +76,16 @@ def _get_c_func_name(base, i, j):
     return "{}_{}_{}".format(base, i, j)
 
 
+def assert_gcc_exists():
+    cmd = "gcc --version"
+
+    assert os.system(cmd) == 0, "sympy_to_c requires GCC to be installed and available in the PATH environment " \
+                                "variable. Please refer to the documentation for instructions. "
+
+
 def compile_ccode(cfilepath):
+    assert_gcc_exists()
+
     assert cfilepath.endswith(".c")
     objfilepath = "{}.o".format(cfilepath[:-2])
     sofilepath = "{}.so".format(cfilepath[:-2])
