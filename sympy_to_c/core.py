@@ -57,13 +57,6 @@ loaded_so_files = {}
 # key: object; value: (attribute_name, original object)
 replaced_attributes = {}
 
-
-# create a function to unload a lib
-# this is from https://stackoverflow.com/a/50986803/333403
-dlclose_func = ct.CDLL(None).dlclose
-dlclose_func.argtypes = [ct.c_void_p]
-dlclose_func.restype = ct.c_int
-
 meta_data_template = """
 const char* metadata =
 "{}";
@@ -83,7 +76,16 @@ def _get_c_func_name(base, i, j):
     return "{}_{}_{}".format(base, i, j)
 
 
+def assert_gcc_exists():
+    cmd = "gcc --version"
+
+    assert os.system(cmd) == 0, "sympy_to_c requires GCC to be installed and available in the PATH environment " \
+                                "variable. Please refer to the documentation for instructions. "
+
+
 def compile_ccode(cfilepath):
+    assert_gcc_exists()
+
     assert cfilepath.endswith(".c")
     objfilepath = "{}.o".format(cfilepath[:-2])
     sofilepath = "{}.so".format(cfilepath[:-2])
@@ -187,6 +189,10 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
     metadata_s = b64encode(pickle.dumps(metadata))
 
     _generate_ccode(args, expr_matrix, basename, cfilepath, shape, md=metadata_s)
+
+    # We potentially need to unload before we compile, because otherwise the file is locked
+    if sopath in loaded_so_files:
+        unload_lib(sopath)
 
     sopath = compile_ccode(cfilepath)
     sopath = ensure_valid_libpath(sopath)
@@ -321,6 +327,8 @@ def ensure_valid_libpath(libpath):
     prefix, name = os.path.split(libpath)
     if prefix == "":
         libpath = os.path.join(".", libpath)
+
+    libpath = os.path.abspath(libpath)
     return libpath
 
 
@@ -331,11 +339,11 @@ def _loadlib(libpath):
         lib = loaded_so_files[libpath]
     else:
         try:
+            print("loading ", libpath)
             lib = ct.cdll.LoadLibrary(libpath)
         except OSError as oerr:
             raise FileNotFoundError(oerr.args[0])
         loaded_so_files[libpath] = lib
-        print("loading ", libpath)
     return lib
 
 
@@ -348,10 +356,14 @@ def unload_lib(libpath):
 
     else:
         # noinspection PyProtectedMember
-        handle = loaded_so_files.get(libpath)._handle
-        _ = dlclose_func(handle)
+        lib = loaded_so_files.pop(libpath)
+        handle = lib._handle
+        del lib
 
-        loaded_so_files.pop(libpath)
+        if os.name == 'posix':
+            ct.CDLL('libdl.so').dlclose(handle)
+        elif os.name == 'nt':
+            ct.windll.kernel32.FreeLibrary(handle)
 
 
 def unload_all_libs():

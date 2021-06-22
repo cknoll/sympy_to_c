@@ -22,6 +22,13 @@ Simple library to create importable C-functions from sympy-Expressions
 * Free software: GNU General Public License v3
 * Documentation: https://sympy-to-c.readthedocs.io.
 
+Installation
+------------
+sympy_to_c is available on the Python Package Index and can thus simply be
+installed with ``pip install sympy_to_c``.
+It also requires GCC binaries to be on the system path.
+This should normally be the case when you're using Linux, Windows users
+can refer to the `documentation <windows_compiler.md>`_.
 
 Features
 --------
