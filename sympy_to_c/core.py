@@ -60,9 +60,9 @@ replaced_attributes = {}
 
 # create a function to unload a lib
 # this is from https://stackoverflow.com/a/50986803/333403
-dlclose_func = ct.CDLL(None).dlclose
-dlclose_func.argtypes = [ct.c_void_p]
-dlclose_func.restype = ct.c_int
+#dlclose_func = ct.CDLL(None).dlclose
+#dlclose_func.argtypes = [ct.c_void_p]
+#dlclose_func.restype = ct.c_int
 
 meta_data_template = """
 const char* metadata =
