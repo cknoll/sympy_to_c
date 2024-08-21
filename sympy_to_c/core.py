@@ -121,6 +121,11 @@ def convert_to_c(args, expr, basename="expr", c_file_path="sp2c_lib.c", pathpref
     :return:    python-callable wrapping the respective c-functions
     """
 
+    try:
+        len(args)
+    except TypeError:
+        args = [args]
+
     if pathprefix is None:
         pathprefix = path_of_caller()
     assert isinstance(pathprefix, basestring)
@@ -306,6 +311,7 @@ def _generate_c_code(args, expr_matrix, basename, libname, shape, md=None):
         c_code = "\n".join(line for line in c_code.split("\n") if not line.startswith("#include"))
 
         c_code = convert_int_func_to_double(c_code)
+        c_code = convert_booleans(c_code)
 
         c_code_list.append(c_code)
 
@@ -327,6 +333,13 @@ def _generate_c_code(args, expr_matrix, basename, libname, shape, md=None):
 
     with open(libname, "w") as c_file:
         c_file.write(final_code)
+
+
+def convert_booleans(c_code):
+
+    new_c_code = c_code.replace(" true", " 1").replace(" false", " 0")
+    return new_c_code
+
 
 def convert_int_func_to_double(c_code):
     if c_code.startswith("double "):

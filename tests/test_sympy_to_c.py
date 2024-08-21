@@ -230,8 +230,25 @@ class TestSympy_to_c(unittest.TestCase):
         for i in range(len(self.M1)):
             self.assertEqual(r4[i], 0)
 
-    def test_07__implemented_function(self):
-        pass
+    def test_07__boolean_expression(self):
+        from sympy import Piecewise, Abs, ITE
+
+        x3, x4 = sp.symbols("x3, x4")
+        expr = Piecewise((-1, x3 < 0), (1, True))*Piecewise((0, ITE(x3 < 0, Abs(x3) < 0.3, False)), ((-Piecewise((0.3, x3 < 0), (0, True)) + Abs(x3))/(0.95 - Piecewise((0.3, x3 < 0), (0, True))), Abs(x3) < 0.95), (1, True))
+
+        xx = np.linspace(-1, 1, 500)
+        func_lmd = sp.lambdify(x3, expr)
+        yy_lmd = np.array([func_lmd(x) for x in xx])
+
+        func_c = sp2c.convert_to_c(x3, expr)
+        yy_c = np.array([func_c(x) for x in xx])
+
+        if 0:
+            from matplotlib import pyplot as plt
+            plt.plot(xx, yy_lmd)
+            plt.plot(xx, yy_c + .1, "--")
+            plt.show()
+        np.allclose(yy_lmd - yy_c, 0)
 
 
 def main():
