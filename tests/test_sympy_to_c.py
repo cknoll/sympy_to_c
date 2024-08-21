@@ -73,7 +73,9 @@ class TestSympy_to_c(unittest.TestCase):
         M1_l_func = sp.lambdify(self.xx, self.M1)
 
         for xx in self.XX:
-            self.assertTrue(np.allclose(M1_c_func(*xx), M1_l_func(*xx)))
+            res1 = M1_c_func(*xx)
+            res2 = M1_l_func(*xx)
+            self.assertTrue(np.allclose(res1, res2))
 
     def test_meta_data(self):
         """

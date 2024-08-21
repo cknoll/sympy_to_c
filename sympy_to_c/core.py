@@ -294,6 +294,8 @@ def _generate_ccode(args, expr_matrix, basename, libname, shape, md=None):
 
         ccode = "\n".join(line for line in ccode.split("\n") if not line.startswith("#include"))
 
+        ccode = convert_int_func_to_double(ccode)
+
         ccode_list.append(ccode)
 
     res = "\n\n".join(ccode_list)
@@ -314,6 +316,28 @@ def _generate_ccode(args, expr_matrix, basename, libname, shape, md=None):
 
     with open(libname, "w") as cfile:
         cfile.write(final_code)
+
+def convert_int_func_to_double(ccode):
+    if ccode.startswith("double "):
+        return ccode
+
+    lines = ccode.split("\n")
+
+    int_beginning = "int expr_"
+    line0 = lines[0]
+    assert line0.startswith(int_beginning)
+    assert line0.count(int_beginning) == 1
+    lines[0] = line0.replace(int_beginning, "double expr_")
+
+    return_line = lines[-3]
+
+    return_src_beginning = "return expr"
+    assert return_line.count(return_src_beginning) == 1
+    lines[-3] = return_line.replace(return_src_beginning, "return (double)expr")
+
+    new_ccode = "\n".join(lines)
+
+    return new_ccode
 
 
 def ensure_valid_libpath(libpath):
