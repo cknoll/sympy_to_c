@@ -52,12 +52,6 @@ created_so_files = []
 # format: {"<so-path>": handle}
 loaded_so_files = {}
 
-# keep track of which attributes of which objects have been replaced
-# (see _enable_reproducible_pickle_repr_for_expr)
-# key: object; value: (attribute_name, original object)
-replaced_attributes = {}
-
-
 # create a function to unload a lib
 # this is from https://stackoverflow.com/a/50986803/333403
 dlclose_func = ct.CDLL(None).dlclose
@@ -83,12 +77,12 @@ def _get_c_func_name(base, i, j):
     return "{}_{}_{}".format(base, i, j)
 
 
-def compile_ccode(cfilepath):
-    assert cfilepath.endswith(".c")
-    objfilepath = "{}.o".format(cfilepath[:-2])
-    sofilepath = "{}.so".format(cfilepath[:-2])
-    cmd1 = "gcc -c -fPIC -lm {} -o {}".format(cfilepath, objfilepath)
-    cmd2 = "gcc -shared {} -o {}".format(objfilepath, sofilepath)
+def compile_c_code(c_file_path):
+    assert c_file_path.endswith(".c")
+    obj_file_path = "{}.o".format(c_file_path[:-2])
+    so_file_path = "{}.so".format(c_file_path[:-2])
+    cmd1 = "gcc -c -fPIC -lm {} -o {}".format(c_file_path, obj_file_path)
+    cmd2 = "gcc -shared {} -o {}".format(obj_file_path, so_file_path)
 
     print(cmd1)
     assert os.system(cmd1) == 0
@@ -98,26 +92,26 @@ def compile_ccode(cfilepath):
 
     # it might be the case that we already created a file with that name in that session
     # e.g. during unit-testing
-    if not sofilepath in created_so_files:
-        created_so_files.append(sofilepath)
+    if not so_file_path in created_so_files:
+        created_so_files.append(so_file_path)
 
     if CLEANUP:
-        os.remove(cfilepath)
-        os.remove(objfilepath)
+        os.remove(c_file_path)
+        os.remove(obj_file_path)
 
-    return sofilepath
+    return so_file_path
 
 
-def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=None,
-                 use_exisiting_so=True, additional_metadata=None):
+def convert_to_c(args, expr, basename="expr", c_file_path="sp2c_lib.c", pathprefix=None,
+                 use_existing_so=True, additional_metadata=None):
     """
 
     :param args:
     :param expr:
     :param basename:
-    :param cfilepath:
+    :param c_file_path:
     :param pathprefix:
-    :param use_exisiting_so:    either True (fastest), False (most secure) or "smart" (compromise).
+    :param use_existing_so:     either True (fastest), False (most secure) or "smart" (compromise).
                                 Optionally omit the generation of new c-code if an .so-file with
                                 appropriate name (value `True`) or expr-hash (option `"smart"`)
                                 already exists (True).
@@ -131,13 +125,13 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
         pathprefix = path_of_caller()
     assert isinstance(pathprefix, basestring)
 
-    cfilepath = os.path.join(pathprefix, cfilepath)
+    c_file_path = os.path.join(pathprefix, c_file_path)
 
-    sopath = _get_so_path(cfilepath)
-    if sopath in loaded_so_files:
+    so_path = _get_so_path(c_file_path)
+    if so_path in loaded_so_files:
         # ensure to use actual information
-        unload_lib(sopath)
-        _loadlib(sopath)
+        unload_lib(so_path)
+        _loadlib(so_path)
 
     if isinstance(expr, sp.MatrixBase):
         shape = expr.shape
@@ -152,20 +146,20 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
     # convert expr to pickle-string and calculate the hash
     # this is faster converting expr to str and then taking the hash
     fingerprint = reproducible_fast_hash(expr_matrix)
-    if use_exisiting_so == "smart":
-        md = get_meta_data(cfilepath)
+    if use_existing_so == "smart":
+        md = get_meta_data(c_file_path)
         if md["fingerprint"] == fingerprint:
-            use_exisiting_so = True
+            use_existing_so = True
         else:
             print("Fingerprints of expression do not match.\n"
                   "Regeneration of shared object.")
-            use_exisiting_so = False
+            use_existing_so = False
 
-    if use_exisiting_so:
-        if not os.path.isfile(sopath):
-            print("Could not find {}. Create and compile new c-code.".format(sopath))
+    if use_existing_so:
+        if not os.path.isfile(so_path):
+            print("Could not find {}. Create and compile new c-code.".format(so_path))
         else:
-            res = load_func(sopath)
+            res = load_func(so_path)
             res.reused_c_code = True
             return res
 
@@ -183,27 +177,27 @@ def convert_to_c(args, expr, basename="expr", cfilepath="sp2clib.c", pathprefix=
     if additional_metadata is None:
         additional_metadata = {}
     assert not set(metadata.keys()).intersection(additional_metadata.keys())
-    metadata.update(_dict_to_ordered_dict(additional_metadata))
+    metadata.update(additional_metadata)
     metadata_s = b64encode(pickle.dumps(metadata))
 
-    _generate_ccode(args, expr_matrix, basename, cfilepath, shape, md=metadata_s)
+    _generate_c_code(args, expr_matrix, basename, c_file_path, shape, md=metadata_s)
 
-    sopath = compile_ccode(cfilepath)
-    sopath = ensure_valid_libpath(sopath)
+    so_path = compile_c_code(c_file_path)
+    so_path = ensure_valid_lib_path(so_path)
 
-    if sopath in loaded_so_files:
+    if so_path in loaded_so_files:
         # again ensure to use actual information
-        unload_lib(sopath)
-        _loadlib(sopath)
-    res = load_func(sopath)
+        unload_lib(so_path)
+        _loadlib(so_path)
+    res = load_func(so_path)
     res.reused_c_code = False
     res.metadata = metadata
     return res
 
 
-def load_func(sopath, basename=None, scalar_flag=None, shape=None, nargs=None):
+def load_func(so_path, basename=None, scalar_flag=None, shape=None, nargs=None):
 
-    md = get_meta_data(sopath)
+    md = get_meta_data(so_path)
 
     if basename is None:
         basename = "expr"
@@ -215,34 +209,34 @@ def load_func(sopath, basename=None, scalar_flag=None, shape=None, nargs=None):
         nargs = md["nargs"]
 
     if scalar_flag:
-        funcname = _get_c_func_name(basename, 0, 0)
-        return load_func_from_solib(sopath, funcname, nargs)
+        func_name = _get_c_func_name(basename, 0, 0)
+        return load_func_from_so_lib(so_path, func_name, nargs)
     else:
-        return load_matrix_func_from_solib(sopath, basename, shape, nargs)
+        return load_matrix_func_from_so_lib(so_path, basename, shape, nargs)
 
 
-def get_meta_data(libpath, reload_lib=False):
+def get_meta_data(lib_path, reload_lib=False):
     """
     try to load the .so file and try to call the get_meta_data() function. This returns
     a base64-encoded byte-array of a pickled dict
 
-    :param libpath:        path of the .so- or c-file (from which the .so file was created)
-    :param reload_lib:     flag that dertmines whether to reload the lib (this might break
+    :param lib_path:       path of the .so- or c-file (from which the .so file was created)
+    :param reload_lib:     flag that determines whether to reload the lib (this might break
                            references and lead to segfaults)
 
     :return: dict with meta data
     """
 
-    if not libpath.endswith(".so"):
-        libpath = _get_so_path(libpath)
+    if not lib_path.endswith(".so"):
+        lib_path = _get_so_path(lib_path)
     else:
-        libpath = ensure_valid_libpath(libpath)
+        lib_path = ensure_valid_lib_path(lib_path)
 
     # be sure to load the actual metadata
-    if reload_lib and (libpath in loaded_so_files):
-        unload_lib(libpath)
+    if reload_lib and (lib_path in loaded_so_files):
+        unload_lib(lib_path)
 
-    lib = _loadlib(libpath)
+    lib = _loadlib(lib_path)
 
     try:
         # load pointers
@@ -259,14 +253,14 @@ def get_meta_data(libpath, reload_lib=False):
     return md
 
 
-def _get_so_path(cfilepath):
-    assert cfilepath.endswith(".c")
-    sopath = "{}.so".format(cfilepath[:-2])
+def _get_so_path(c_file_path):
+    assert c_file_path.endswith(".c")
+    so_path = "{}.so".format(c_file_path[:-2])
 
-    return ensure_valid_libpath(sopath)
+    return ensure_valid_lib_path(so_path)
 
 
-def _generate_ccode(args, expr_matrix, basename, libname, shape, md=None):
+def _generate_c_code(args, expr_matrix, basename, libname, shape, md=None):
     """
 
     :param args:
@@ -282,23 +276,23 @@ def _generate_ccode(args, expr_matrix, basename, libname, shape, md=None):
     # list of index-pairs
     idcs = it.product(range(nr), range(nc))
 
-    ccode_list = []
+    c_code_list = []
     for i, j in idcs:
         tmp_expr = expr_matrix[i, j]
 
-        partfuncname = _get_c_func_name(basename, i, j)
+        part_func_name = _get_c_func_name(basename, i, j)
 
-        c_res = codegen((partfuncname, tmp_expr), "C", "test",
+        c_res = codegen((part_func_name, tmp_expr), "C", "test",
                         header=False, empty=False, argument_sequence=args)
-        [(c_name, ccode), (h_name, c_header)] = c_res
+        [(c_name, c_code), (h_name, c_header)] = c_res
 
-        ccode = "\n".join(line for line in ccode.split("\n") if not line.startswith("#include"))
+        c_code = "\n".join(line for line in c_code.split("\n") if not line.startswith("#include"))
 
-        ccode = convert_int_func_to_double(ccode)
+        c_code = convert_int_func_to_double(c_code)
 
-        ccode_list.append(ccode)
+        c_code_list.append(c_code)
 
-    res = "\n\n".join(ccode_list)
+    res = "\n\n".join(c_code_list)
 
     final_code = "#include <math.h>\n\n{}".format(res)
 
@@ -314,14 +308,14 @@ def _generate_ccode(args, expr_matrix, basename, libname, shape, md=None):
         md_var = meta_data_template.format(md2)
         final_code = "{}\n{}".format(final_code, md_var)
 
-    with open(libname, "w") as cfile:
-        cfile.write(final_code)
+    with open(libname, "w") as c_file:
+        c_file.write(final_code)
 
-def convert_int_func_to_double(ccode):
-    if ccode.startswith("double "):
-        return ccode
+def convert_int_func_to_double(c_code):
+    if c_code.startswith("double "):
+        return c_code
 
-    lines = ccode.split("\n")
+    lines = c_code.split("\n")
 
     int_beginning = "int expr_"
     line0 = lines[0]
@@ -335,68 +329,68 @@ def convert_int_func_to_double(ccode):
     assert return_line.count(return_src_beginning) == 1
     lines[-3] = return_line.replace(return_src_beginning, "return (double)expr")
 
-    new_ccode = "\n".join(lines)
+    new_c_code = "\n".join(lines)
 
-    return new_ccode
+    return new_c_code
 
 
-def ensure_valid_libpath(libpath):
+def ensure_valid_lib_path(lib_path):
     # ensure that the path prefix is at least "./"
-    prefix, name = os.path.split(libpath)
+    prefix, name = os.path.split(lib_path)
     if prefix == "":
-        libpath = os.path.join(".", libpath)
-    return libpath
+        lib_path = os.path.join(".", lib_path)
+    return lib_path
 
 
-def _loadlib(libpath):
-    libpath = ensure_valid_libpath(libpath)
+def _loadlib(lib_path):
+    lib_path = ensure_valid_lib_path(lib_path)
 
-    if libpath in loaded_so_files:
-        lib = loaded_so_files[libpath]
+    if lib_path in loaded_so_files:
+        lib = loaded_so_files[lib_path]
     else:
         try:
-            lib = ct.cdll.LoadLibrary(libpath)
-        except OSError as oerr:
-            raise FileNotFoundError(oerr.args[0])
-        loaded_so_files[libpath] = lib
-        print("loading ", libpath)
+            lib = ct.cdll.LoadLibrary(lib_path)
+        except OSError as os_err:
+            raise FileNotFoundError(os_err.args[0])
+        loaded_so_files[lib_path] = lib
+        print("loading ", lib_path)
     return lib
 
 
-def unload_lib(libpath):
-    libpath = ensure_valid_libpath(libpath)
+def unload_lib(lib_path):
+    lib_path = ensure_valid_lib_path(lib_path)
 
-    if not libpath in loaded_so_files:
-        msg = "{} can not be unloaded because it was not loaded.".format(libpath)
+    if not lib_path in loaded_so_files:
+        msg = "{} can not be unloaded because it was not loaded.".format(lib_path)
         raise ValueError(msg)
 
     else:
         # noinspection PyProtectedMember
-        handle = loaded_so_files.get(libpath)._handle
+        handle = loaded_so_files.get(lib_path)._handle
         _ = dlclose_func(handle)
 
-        loaded_so_files.pop(libpath)
+        loaded_so_files.pop(lib_path)
 
 
 def unload_all_libs():
-    for libpath, lib in list(loaded_so_files.items()):
-        unload_lib(libpath)
+    for lib_path, lib in list(loaded_so_files.items()):
+        unload_lib(lib_path)
 
 
-def load_func_from_solib(libpath, funcname, nargs, raw=False):
+def load_func_from_so_lib(lib_path, func_name, nargs, raw=False):
     """
 
-    :param libpath:
-    :param funcname:
+    :param lib_path:
+    :param func_name:
     :param raw:         Boolean (default: `False`) return the unwrapped c-function
     :param nargs:       number of float args
     :return:
     """
 
-    lib = _loadlib(libpath)
+    lib = _loadlib(lib_path)
 
     # TODO: throw exception on failure
-    the_c_func = getattr(lib, funcname)
+    the_c_func = getattr(lib, func_name)
 
     if raw:
         return the_c_func
@@ -406,18 +400,18 @@ def load_func_from_solib(libpath, funcname, nargs, raw=False):
     the_c_func.argtypes = [ct.c_double]*nargs
 
     # the caller must take care of the number of args
-    def thefunc(*args):
+    def the_func(*args):
         assert len(args) == nargs
 
         res = the_c_func(*args)
 
         return res
 
-    return thefunc
+    return the_func
 
 
 # noinspection PyPep8Naming
-def load_matrix_func_from_solib(libname, basename, shape, nargs):
+def load_matrix_func_from_so_lib(libname, basename, shape, nargs):
     """
 
     :param libname:
@@ -434,8 +428,8 @@ def load_matrix_func_from_solib(libname, basename, shape, nargs):
 
     M_func_list = []
     for i, j in idcs:
-        funcname = _get_c_func_name(basename, i, j)
-        M_func_list.append(load_func_from_solib(libname, funcname, nargs))
+        func_name = _get_c_func_name(basename, i, j)
+        M_func_list.append(load_func_from_so_lib(libname, func_name, nargs))
 
     def M_func(*args):
         if not len(args) == nargs:
@@ -446,7 +440,7 @@ def load_matrix_func_from_solib(libname, basename, shape, nargs):
     return M_func
 
 
-# The follwing code is a workarround for https://github.com/sympy/sympy/issues/14835
+# The following code is a workaround for https://github.com/sympy/sympy/issues/14835
 # It serves to generate a reproducible pickle representation of sympy expressions
 # Original pickle representation may vary due to dict sorting depending on builtin hash()
 # which is randomized for security reasons
@@ -489,94 +483,21 @@ def _find_dicts_in_obj(obj):
 
     return all_dicts
 
-
-def _dict_to_ordered_dict(thedict):
-    """
-    Convert classical dict to OrderedDict (sorted by keys)
-    :param thedict:     dict
-    :return:            OrderedDict
-    """
-
-    # this function is no longer necessary (because of stable ordering in dicts)
-    # in fact for newer sympy versions it causes problems
-    return thedict
-    assert isinstance(thedict, dict)
-    return OrderedDict(sorted(thedict.items()))
-
-
-def _enable_reproducible_pickle_repr_for_expr(expr):
-    """
-    Convert all attributes which are dicts to OrderedDict. (See motivation above).
-    Store the original objects for later recovery.
-
-    :param expr:
-    :return:        None
-    """
-
-    all_dicts = _find_dicts_in_obj(expr)
-
-    for dictname in all_dicts:
-        if dictname in blacklisted_dict_names:
-            continue
-
-        thedict = getattr(expr, dictname)
-
-        # account for attributes which have been converted earlier
-        if isinstance(thedict, OrderedDict):
-            continue
-
-        assert isinstance(thedict, dict)
-        try:
-            newordereddict = _dict_to_ordered_dict(thedict)
-        except ValueError:
-            IPS()
-            raise SystemExit
-        try:
-            setattr(expr, dictname, newordereddict)
-        except AttributeError as aerr:
-            pass
-        else:
-            replaced_attributes[expr] = (dictname, thedict)
-
-
-def _rewind_all_dict_replacements():
-    """
-    This function serves to reset all objects which where chaged by
-    _reproducible_pickle_repr_for_expr() in their original state
-
-    :return:
-    """
-
-    # noinspection PyShadowingBuiltins
-    for object, (attrname, original) in list(replaced_attributes.items()):
-        setattr(object, attrname, original)
-
-        replaced_attributes.pop(object)
-
-
 def reproducible_pickle_repr(expr):
     """
 
-    :param expr:    sympy matrix (containig the relevant expression(s))
+    :param expr:    sympy matrix (containing the relevant expression(s))
     :return:        byte-array (result of pickle.dumps)
     """
 
-    assert len(replaced_attributes) == 0
+    # in the past this function had to do much more
 
     assert isinstance(expr, (sp.Basic, sp.MatrixBase))
 
     if isinstance(expr, sp.MatrixBase):
         expr = sp.ImmutableDenseMatrix(expr)
 
-    symbols = expr.atoms(sp.Symbol)
-    # _enable_reproducible_pickle_repr_for_expr(expr)
-
-    for s in symbols:
-        _enable_reproducible_pickle_repr_for_expr(s)
-
     pickle_dump = pickle.dumps(expr)
-
-    _rewind_all_dict_replacements()
 
     return pickle_dump
 
@@ -589,7 +510,7 @@ def reproducible_fast_hash(expr):
     """
 
     if isinstance(expr, (list, tuple)):
-        pklrepr = b"\n\n".join([reproducible_pickle_repr(e) for e in expr])
+        pkl_repr = b"\n\n".join([reproducible_pickle_repr(e) for e in expr])
     else:
-        pklrepr = reproducible_pickle_repr(expr)
-    return hashlib.sha256(pklrepr).hexdigest()
+        pkl_repr = reproducible_pickle_repr(expr)
+    return hashlib.sha256(pkl_repr).hexdigest()

@@ -55,15 +55,15 @@ class TestSympy_to_c(unittest.TestCase):
         sp2c.unload_all_libs()
 
         while sp2c.created_so_files:
-            sofilepath = sp2c.created_so_files.pop()
-            print("deleting", sofilepath)
-            os.remove(sofilepath)
+            so_file_path = sp2c.created_so_files.pop()
+            print("deleting", so_file_path)
+            os.remove(so_file_path)
 
     def test_scalar_expression(self):
         """Test conversion of simple scalar expression."""
 
-        e1_c_func = sp2c.convert_to_c(self.xx, self.e1, cfilepath="scalar.c",
-                                      use_exisiting_so=False)
+        e1_c_func = sp2c.convert_to_c(self.xx, self.e1, c_file_path="scalar.c",
+                                      use_existing_so=False)
         e1_l_func = sp.lambdify(self.xx, self.e1)
 
         for xx in self.XX:
@@ -72,8 +72,8 @@ class TestSympy_to_c(unittest.TestCase):
     def test_matrix_expression(self):
         """Test conversion of simple matrix."""
 
-        M1_c_func = sp2c.convert_to_c(self.xx, self.M1, cfilepath="matrix.c",
-                                      use_exisiting_so=False)
+        M1_c_func = sp2c.convert_to_c(self.xx, self.M1, c_file_path="matrix.c",
+                                      use_existing_so=False)
         M1_l_func = sp.lambdify(self.xx, self.M1)
 
         for xx in self.XX:
@@ -89,10 +89,10 @@ class TestSympy_to_c(unittest.TestCase):
 
         # additional metadata
         amd = dict(fnordskol=23.42)
-        M1_c_func = sp2c.convert_to_c(self.xx, self.M1, cfilepath="matrix.c",
-                                      use_exisiting_so=False, additional_metadata=amd)
+        M1_c_func = sp2c.convert_to_c(self.xx, self.M1, c_file_path="matrix.c",
+                                      use_existing_so=False, additional_metadata=amd)
 
-        # get metadate directly
+        # get metadata directly
         md = M1_c_func.metadata
 
         # load metadata from library (e.g. from a different program)
@@ -168,13 +168,13 @@ class TestSympy_to_c(unittest.TestCase):
         # create new so-file
         sp2c.CLEANUP = False
 
-        M1_c_func = sp2c.convert_to_c(self.xx, self.M1, cfilepath="matrix.c",
-                                      use_exisiting_so=False)
+        M1_c_func = sp2c.convert_to_c(self.xx, self.M1, c_file_path="matrix.c",
+                                      use_existing_so=False)
 
         # other expression but no new c-Code
         print("\n", "other expression but no new c-Code")
-        M2_c_func = sp2c.convert_to_c(self.xx, self.M1*0, cfilepath="matrix.c",
-                                      use_exisiting_so=True)
+        M2_c_func = sp2c.convert_to_c(self.xx, self.M1*0, c_file_path="matrix.c",
+                                      use_existing_so=True)
 
         self.assertTrue(M2_c_func.reused_c_code)
 
@@ -189,8 +189,8 @@ class TestSympy_to_c(unittest.TestCase):
 
         # same expression -> no new code
         print("\n", " same expression -> no new code")
-        M3_c_func = sp2c.convert_to_c(self.xx, self.M1, cfilepath="matrix.c",
-                                      use_exisiting_so="smart")
+        M3_c_func = sp2c.convert_to_c(self.xx, self.M1, c_file_path="matrix.c",
+                                      use_existing_so="smart")
 
         ts3 = sp2c.get_meta_data(self.matrix_c_file_path)["timestamp"]
 
@@ -202,8 +202,8 @@ class TestSympy_to_c(unittest.TestCase):
         self.assertEqual(ts2, ts3)
 
         print("\n", " different expression -> new code -> new_load")
-        M4_c_func = sp2c.convert_to_c(self.xx, self.M1*0, cfilepath="matrix.c",
-                                      use_exisiting_so="smart")
+        M4_c_func = sp2c.convert_to_c(self.xx, self.M1*0, c_file_path="matrix.c",
+                                      use_existing_so="smart")
 
         self.assertFalse(M4_c_func.reused_c_code)
 

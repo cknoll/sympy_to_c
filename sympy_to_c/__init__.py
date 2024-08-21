@@ -5,7 +5,7 @@ from .core import convert_to_c, get_meta_data, unload_lib, unload_all_libs, crea
 
 from .release import __version__
 
-# support leagacy imports like from sympy_to_c import sympy_to_c as sp2c
+# support legacy imports like from sympy_to_c import sympy_to_c as sp2c
 class Container(object):
     pass
 
