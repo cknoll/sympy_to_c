@@ -45,6 +45,10 @@ class TestSympy_to_c(unittest.TestCase):
         N = 100
         self.XX = np.random.random((N, len(self.xx)))
 
+        dir_of_this_file = os.path.abspath(os.path.dirname(__file__))
+        self.matrix_c_file_path = os.path.join(dir_of_this_file, "matrix.c")
+
+
     def tearDown(self):
         """Tear down test fixtures, if any."""
 
@@ -92,7 +96,7 @@ class TestSympy_to_c(unittest.TestCase):
         md = M1_c_func.metadata
 
         # load metadata from library (e.g. from a different program)
-        md2 = sp2c.get_meta_data("matrix.c")
+        md2 = sp2c.get_meta_data(self.matrix_c_file_path)
 
         # the dicts must be equal but not be identical
         assert md == md2
@@ -181,16 +185,16 @@ class TestSympy_to_c(unittest.TestCase):
         for i in range(len(self.M1)):
             self.assertEqual(r1[i], r2[i])
 
-        ts2 = sp2c.get_meta_data("matrix.c")["timestamp"]
+        ts2 = sp2c.get_meta_data(self.matrix_c_file_path)["timestamp"]
 
         # same expression -> no new code
         print("\n", " same expression -> no new code")
         M3_c_func = sp2c.convert_to_c(self.xx, self.M1, cfilepath="matrix.c",
                                       use_exisiting_so="smart")
 
-        ts3 = sp2c.get_meta_data("matrix.c")["timestamp"]
+        ts3 = sp2c.get_meta_data(self.matrix_c_file_path)["timestamp"]
 
-        md3 = sp2c.get_meta_data("matrix.c")
+        md3 = sp2c.get_meta_data(self.matrix_c_file_path)
 
         # this should work
         self.assertTrue(M3_c_func.reused_c_code)
@@ -203,9 +207,9 @@ class TestSympy_to_c(unittest.TestCase):
 
         self.assertFalse(M4_c_func.reused_c_code)
 
-        ts4 = sp2c.get_meta_data("matrix.c")["timestamp"]
+        ts4 = sp2c.get_meta_data(self.matrix_c_file_path)["timestamp"]
 
-        md4 = sp2c.get_meta_data("matrix.c")
+        md4 = sp2c.get_meta_data(self.matrix_c_file_path)
 
         self.assertNotEqual(ts3, ts4)
 
