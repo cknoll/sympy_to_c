@@ -15,7 +15,9 @@ import pickle
 
 try:
     # this is handy for debugging but otherwise not needed
-    from ipydex import IPS
+    from ipydex import IPS, activate_ips_on_exception
+    # activate_ips_on_exception()
+
 except ImportError:
     pass
 

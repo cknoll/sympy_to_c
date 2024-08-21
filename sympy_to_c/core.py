@@ -473,6 +473,9 @@ def _dict_to_ordered_dict(thedict):
     :return:            OrderedDict
     """
 
+    # this function is no longer necessary (because of stable ordering in dicts)
+    # in fact for newer sympy versions it causes problems
+    return thedict
     assert isinstance(thedict, dict)
     return OrderedDict(sorted(thedict.items()))
 
