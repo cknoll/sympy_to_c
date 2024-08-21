@@ -16,7 +16,7 @@ import pickle
 try:
     # this is handy for debugging but otherwise not needed
     from ipydex import IPS, activate_ips_on_exception
-    # activate_ips_on_exception()
+    activate_ips_on_exception()
 
 except ImportError:
     pass
@@ -59,7 +59,7 @@ class TestSympy_to_c(unittest.TestCase):
             print("deleting", so_file_path)
             os.remove(so_file_path)
 
-    def test_scalar_expression(self):
+    def test_01__scalar_expression(self):
         """Test conversion of simple scalar expression."""
 
         e1_c_func = sp2c.convert_to_c(self.xx, self.e1, c_file_path="scalar.c",
@@ -69,7 +69,7 @@ class TestSympy_to_c(unittest.TestCase):
         for xx in self.XX:
             self.assertAlmostEqual(e1_c_func(*xx), e1_l_func(*xx))
 
-    def test_matrix_expression(self):
+    def test_02__matrix_expression(self):
         """Test conversion of simple matrix."""
 
         M1_c_func = sp2c.convert_to_c(self.xx, self.M1, c_file_path="matrix.c",
@@ -81,7 +81,20 @@ class TestSympy_to_c(unittest.TestCase):
             res2 = M1_l_func(*xx)
             self.assertTrue(np.allclose(res1, res2))
 
-    def test_meta_data(self):
+    def test_02b__list_of_expressions(self):
+        """Test conversion of simple matrix."""
+
+        list_of_exprs = list(self.M1)
+        M1_c_func = sp2c.convert_to_c(self.xx, list_of_exprs, c_file_path="matrix.c",
+                                      use_existing_so=False)
+        M1_l_func = sp.lambdify(self.xx, list_of_exprs)
+
+        for xx in self.XX:
+            res1 = M1_c_func(*xx)
+            res2 = M1_l_func(*xx)
+            self.assertTrue(np.allclose(res1, res2))
+
+    def test_03__meta_data(self):
         """
         Background:
         convert_to_c can store almost arbitrary data inside the shared library in form of a base64 encoded dict.
@@ -114,7 +127,7 @@ class TestSympy_to_c(unittest.TestCase):
 
     @unittest.skip
     @unittest.expectedFailure
-    def test_hashing1(self):
+    def test_04__hashing1(self):
 
         # this test is related to https://github.com/sympy/sympy/issues/14808
 
@@ -133,7 +146,7 @@ class TestSympy_to_c(unittest.TestCase):
         self.assertEqual(h1, h2)
         self.assertEqual(h1, h3)
 
-    def test_hashing3(self):
+    def test_04b__hashing3(self):
 
         h1 = hashlib.sha256(pickle.dumps(self.xx)).hexdigest()
         s1 = pickle.dumps(self.xx[0])
@@ -148,7 +161,7 @@ class TestSympy_to_c(unittest.TestCase):
 
         self.assertEqual(h1, h2)
 
-    def test_reproducible_fast_hash(self):
+    def test_05__reproducible_fast_hash(self):
         """
 
         :return:
@@ -163,7 +176,7 @@ class TestSympy_to_c(unittest.TestCase):
         self.assertEqual(h1, h2)
         print("This should be the same in every run: {}".format(h1))
 
-    def test_use_existing(self):
+    def test_06__use_existing(self):
 
         # create new so-file
         sp2c.CLEANUP = False
@@ -216,6 +229,9 @@ class TestSympy_to_c(unittest.TestCase):
         r4 = M4_c_func(*args).flatten()
         for i in range(len(self.M1)):
             self.assertEqual(r4[i], 0)
+
+    def test_07__implemented_function(self):
+        pass
 
 
 def main():

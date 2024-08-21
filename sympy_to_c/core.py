@@ -133,14 +133,20 @@ def convert_to_c(args, expr, basename="expr", c_file_path="sp2c_lib.c", pathpref
         unload_lib(so_path)
         _loadlib(so_path)
 
+    scalar_flag = False
+    squeeze_flag = False
+
     if isinstance(expr, sp.MatrixBase):
-        shape = expr.shape
         # ensure immutable type
         expr_matrix = sp.ImmutableDenseMatrix(expr)
-        scalar_flag = False
+        shape = expr_matrix.shape
+    elif isinstance(expr, (list, tuple)):
+        expr_matrix = sp.ImmutableDenseMatrix(expr)
+        shape = (len(expr),)
+        squeeze_flag = True
     else:
         scalar_flag = True
-        shape = (1, 1)
+        shape = None
         expr_matrix = sp.ImmutableDenseMatrix([expr])
 
     # convert expr to pickle-string and calculate the hash
@@ -171,7 +177,8 @@ def convert_to_c(args, expr, basename="expr", c_file_path="sp2c_lib.c", pathpref
         args=args,
         # expr=expr_matrix,
         scalar_flag=scalar_flag,
-        shape=expr_matrix.shape
+        shape=expr_matrix.shape,
+        squeeze_flag=squeeze_flag,
     )
 
     if additional_metadata is None:
@@ -195,7 +202,7 @@ def convert_to_c(args, expr, basename="expr", c_file_path="sp2c_lib.c", pathpref
     return res
 
 
-def load_func(so_path, basename=None, scalar_flag=None, shape=None, nargs=None):
+def load_func(so_path, basename=None, scalar_flag=None, shape=None, nargs=None, squeeze_flag=None):
 
     md = get_meta_data(so_path)
 
@@ -203,6 +210,8 @@ def load_func(so_path, basename=None, scalar_flag=None, shape=None, nargs=None):
         basename = "expr"
     if scalar_flag is None:
         scalar_flag = md["scalar_flag"]
+    if squeeze_flag is None:
+        squeeze_flag = md.get("squeeze_flag", False)
     if shape is None:
         shape = md["shape"]
     if nargs is None:
@@ -210,9 +219,17 @@ def load_func(so_path, basename=None, scalar_flag=None, shape=None, nargs=None):
 
     if scalar_flag:
         func_name = _get_c_func_name(basename, 0, 0)
-        return load_func_from_so_lib(so_path, func_name, nargs)
+        loaded_func =  load_func_from_so_lib(so_path, func_name, nargs)
     else:
-        return load_matrix_func_from_so_lib(so_path, basename, shape, nargs)
+        loaded_func = load_matrix_func_from_so_lib(so_path, basename, shape, nargs)
+
+    if squeeze_flag:
+        def final_func(*args):
+            return np.squeeze(loaded_func(*args))
+    else:
+        final_func = loaded_func
+
+    return final_func
 
 
 def get_meta_data(lib_path, reload_lib=False):
@@ -272,7 +289,7 @@ def _generate_c_code(args, expr_matrix, basename, libname, shape, md=None):
     :return:
     """
 
-    nr, nc = shape
+    nr, nc = expr_matrix.shape
     # list of index-pairs
     idcs = it.product(range(nr), range(nc))
 
