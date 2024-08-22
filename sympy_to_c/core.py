@@ -54,7 +54,20 @@ created_so_files = []
 # format: {"<so-path>": handle}
 loaded_so_files = {}
 
-processed_implemented_functions = {}
+class CoreManager:
+    def __init__(self):
+        self.processed_implemented_functions = {}
+        self.aux_funcs = {}
+        self._aux_func_counter = 0
+
+    def next_aux_func_counter(self):
+        self._aux_func_counter += 1
+
+        # start enumeration with 0
+        return self._aux_func_counter - 1
+
+
+cm = CoreManager()
 
 # create a function to unload a lib
 # this is from https://stackoverflow.com/a/50986803/333403
@@ -300,23 +313,31 @@ def _generate_c_code(args, expr_matrix, basename, libname, shape, md=None):
 
     nr, nc = expr_matrix.shape
     # list of index-pairs
-    idcs = it.product(range(nr), range(nc))
+    idcs = list(it.product(range(nr), range(nc)))
+
+    # preparation step (necessary for handling 'implemented functions')
+
+    for i, j in idcs:
+        tmp_expr = expr_matrix[i, j]
+        gather_implemented_functions(tmp_expr)
 
     c_code_list = []
     for i, j in idcs:
         tmp_expr = expr_matrix[i, j]
 
-        gather_implemented_functions(tmp_expr)
-
         part_func_name = _get_c_func_name(basename, i, j)
         c_code = _generate_c_code_of_function(part_func_name, tmp_expr, args)
         c_code_list.append(c_code)
 
-    expr_funcs = "\n\n".join(c_code_list)
 
-    implemented_functions = process_implemented_functions()
+    implemented_funcs_code = process_implemented_functions()
+    expr_funcs_code = "\n\n".join(c_code_list)
 
-    final_code = f"#include <math.h>\n\n{implemented_functions}\n\n{expr_funcs}"
+    expr_funcs_code, aux_funcs_code = process_aux_funcs(expr_funcs_code)
+
+
+    all_parts = "\n\n".join([aux_funcs_code, implemented_funcs_code, expr_funcs_code])
+    final_code = f"#include <math.h>\n\n{all_parts}"
 
     if md is not None:
         md1 = md.decode("ascii")
@@ -334,6 +355,20 @@ def _generate_c_code(args, expr_matrix, basename, libname, shape, md=None):
         c_file.write(final_code)
 
 
+def process_aux_funcs(expr_funcs_code):
+    """
+    Replace the problematic arguments to implemented functions with the proper calls to auxiliary functions
+    """
+    dbg = expr_funcs_code
+    aux_func_code_list = []
+
+    replaced_arg_obj: ReplacedArgument
+    for arg_str, replaced_arg_obj in cm.aux_funcs.items():
+        expr_funcs_code = expr_funcs_code.replace(arg_str, replaced_arg_obj.call_str)
+        aux_func_code_list.append(replaced_arg_obj.c_code)
+
+    return expr_funcs_code, "\n".join(aux_func_code_list)
+
 def _generate_c_code_of_function(part_func_name, expr, args):
     c_res = codegen((part_func_name, expr), "C", "test", header=False, empty=False, argument_sequence=args)
     [(c_name, c_code), (h_name, c_header)] = c_res
@@ -348,7 +383,7 @@ def _generate_c_code_of_function(part_func_name, expr, args):
 
 def process_implemented_functions() -> str:
 
-    res = processed_implemented_functions.values()
+    res = cm.processed_implemented_functions.values()
 
     return "\n".join(res)
 
@@ -364,10 +399,59 @@ def gather_implemented_functions(expr) -> None:
     for cf in custom_functions:
         _gather_implemented_function(cf)
 
+
+class ReplacedArgument:
+    def __init__(self, expr):
+        self.expr = expr
+        self.args = expr.atoms(sp.Symbol)
+
+        func_name = f"aux_{cm.next_aux_func_counter()}"
+        self.c_code = _generate_c_code_of_function(func_name, expr, self.args)
+
+        # will be something like aux_0(x1, x2)
+        self.call_str = f"{func_name}{repr(tuple(self.args))}"
+
+
+def _handle_aux_funcs_for_complex_args(func_obj) -> None:
+    """
+    Problem: for AppliedUndef-instances the sympy-C-code printer prints just the sympy
+    representation of the arguments which might lead to generated "C-code" like:
+    ```
+        my_func(x1, x2, Piecewise((x1*x2, True)))
+    ```
+
+    wich is obviously no valid C code.
+
+    Solution find those args, create functions such that finally we get
+    ```
+        double aux_0(double x1, double x2) {
+         // ...
+        }
+
+        my_func(x1, x2, aux_0(x1, x2))
+    ```
+
+    """
+    for arg in func_obj.args:
+        if isinstance(arg, (sp.Number, sp.Symbol)):
+            continue
+
+        repr_arg = repr(arg)
+        if repr_arg in cm.aux_funcs:
+            # nothing new
+            continue
+
+        # process new argument
+        cm.aux_funcs[repr_arg] = ReplacedArgument(arg)
+
+
 def _gather_implemented_function(applied_func_obj):
     func_obj = type(applied_func_obj)
 
-    if func_obj.name in processed_implemented_functions:
+    _handle_aux_funcs_for_complex_args(applied_func_obj)
+
+
+    if func_obj.name in cm.processed_implemented_functions:
         return
 
     c_implementation = getattr(func_obj, "c_implementation", None)
@@ -376,7 +460,7 @@ def _gather_implemented_function(applied_func_obj):
         raise NotImplementedError(msg)
 
     c_implementation = dedent(c_implementation)
-    processed_implemented_functions[func_obj.name] = c_implementation
+    cm.processed_implemented_functions[func_obj.name] = c_implementation
 
 
 def convert_booleans(c_code):

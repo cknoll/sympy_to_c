@@ -255,11 +255,12 @@ class TestSympy_to_c(unittest.TestCase):
 
         x1, k = sp.symbols("x1, k")
 
+        # separate piecewise expression for better maintainability
         pw_expr = Piecewise((1.4, (Abs(0.1*k - 22.5) < 0.001) | (Abs(0.1*k - 5) < 0.001)), (0, True))
 
         # motivated by special use case
         def counter_start_func_imp(counter_k_start, k, counter_index_state, i, initial_value):
-            return 1
+            return counter_k_start*2.5
 
         counter_start_func = implemented_function(f"counter_start_func", counter_start_func_imp)
         expr = counter_start_func(x1, k, x1, 2, 0.0790139064475348*x1*pw_expr)
@@ -272,7 +273,7 @@ class TestSympy_to_c(unittest.TestCase):
 
         double counter_start_func(double counter_k_start, double k, double counter_index_state, double i, double initial_value) {
            double result;
-            result = 123;
+            result = counter_k_start*2.5;
             return result;
         }
         """
@@ -280,10 +281,7 @@ class TestSympy_to_c(unittest.TestCase):
 
         sp2c.core.CLEANUP = False
         # sp2c.convert_to_c((x1, k), expr.args[-1])
-        # sp2c.convert_to_c((x1, k), expr)
-
-        return
-        IPS()
+        sp2c.convert_to_c((x1, k), expr)
 
         xx = np.linspace(-1, 1, 500)
         func_lmd = sp.lambdify((x1, k), expr)
@@ -291,6 +289,8 @@ class TestSympy_to_c(unittest.TestCase):
 
         func_c = sp2c.convert_to_c((x1, k), expr)
         yy_c = np.array([func_c(x, 23) for x in xx])
+
+        self.assertTrue(np.allclose(yy_lmd - yy_c, 0))
 
 
 def main():
