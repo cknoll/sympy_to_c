@@ -309,16 +309,7 @@ def _generate_c_code(args, expr_matrix, basename, libname, shape, md=None):
         gather_implemented_functions(tmp_expr)
 
         part_func_name = _get_c_func_name(basename, i, j)
-
-        c_res = codegen((part_func_name, tmp_expr), "C", "test",
-                        header=False, empty=False, argument_sequence=args)
-        [(c_name, c_code), (h_name, c_header)] = c_res
-
-        c_code = "\n".join(line for line in c_code.split("\n") if not line.startswith("#include"))
-
-        c_code = convert_int_func_to_double(c_code)
-        c_code = convert_booleans(c_code)
-
+        c_code = _generate_c_code_of_function(part_func_name, tmp_expr, args)
         c_code_list.append(c_code)
 
     expr_funcs = "\n\n".join(c_code_list)
@@ -341,6 +332,18 @@ def _generate_c_code(args, expr_matrix, basename, libname, shape, md=None):
 
     with open(libname, "w") as c_file:
         c_file.write(final_code)
+
+
+def _generate_c_code_of_function(part_func_name, expr, args):
+    c_res = codegen((part_func_name, expr), "C", "test", header=False, empty=False, argument_sequence=args)
+    [(c_name, c_code), (h_name, c_header)] = c_res
+
+    c_code = "\n".join(line for line in c_code.split("\n") if not line.startswith("#include"))
+
+    c_code = convert_int_func_to_double(c_code)
+    c_code = convert_booleans(c_code)
+
+    return c_code
 
 
 def process_implemented_functions() -> str:

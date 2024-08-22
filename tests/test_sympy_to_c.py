@@ -278,7 +278,12 @@ class TestSympy_to_c(unittest.TestCase):
         """
         expr = counter_start_func(x1, k, x1, 2, 0.0790139064475348*x1*pw_expr)
 
+        sp2c.core.CLEANUP = False
+        # sp2c.convert_to_c((x1, k), expr.args[-1])
+        # sp2c.convert_to_c((x1, k), expr)
 
+        return
+        IPS()
 
         xx = np.linspace(-1, 1, 500)
         func_lmd = sp.lambdify((x1, k), expr)
