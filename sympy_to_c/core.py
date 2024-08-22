@@ -12,6 +12,8 @@ import inspect
 import os
 import numpy as np
 import itertools as it
+from textwrap import dedent
+
 import sympy as sp
 from sympy.utilities.codegen import codegen
 import sys
@@ -304,7 +306,7 @@ def _generate_c_code(args, expr_matrix, basename, libname, shape, md=None):
     for i, j in idcs:
         tmp_expr = expr_matrix[i, j]
 
-        process_implemented_functions(tmp_expr)
+        gather_implemented_functions(tmp_expr)
 
         part_func_name = _get_c_func_name(basename, i, j)
 
@@ -319,9 +321,11 @@ def _generate_c_code(args, expr_matrix, basename, libname, shape, md=None):
 
         c_code_list.append(c_code)
 
-    res = "\n\n".join(c_code_list)
+    expr_funcs = "\n\n".join(c_code_list)
 
-    final_code = "#include <math.h>\n\n{}".format(res)
+    implemented_functions = process_implemented_functions()
+
+    final_code = f"#include <math.h>\n\n{implemented_functions}\n\n{expr_funcs}"
 
     if md is not None:
         md1 = md.decode("ascii")
@@ -339,7 +343,14 @@ def _generate_c_code(args, expr_matrix, basename, libname, shape, md=None):
         c_file.write(final_code)
 
 
-def process_implemented_functions(expr) -> None:
+def process_implemented_functions() -> str:
+
+    res = processed_implemented_functions.values()
+
+    return "\n".join(res)
+
+
+def gather_implemented_functions(expr) -> None:
     """
     Sympy allows custom symbolic functions which can have a python implementation.
 
@@ -348,14 +359,21 @@ def process_implemented_functions(expr) -> None:
 
     custom_functions = expr.atoms(sp.core.function.AppliedUndef)
     for cf in custom_functions:
-        _process_implemented_function(cf)
+        _gather_implemented_function(cf)
 
-def _process_implemented_function(applied_func_obj):
+def _gather_implemented_function(applied_func_obj):
     func_obj = type(applied_func_obj)
 
-    if c_implementation := getattr(func_obj, "c_implementation", None) is None:
+    if func_obj.name in processed_implemented_functions:
+        return
+
+    c_implementation = getattr(func_obj, "c_implementation", None)
+    if c_implementation is None:
         msg = f"Applied function of type `{func_obj.name}` without specified C implementation"
         raise NotImplementedError(msg)
+
+    c_implementation = dedent(c_implementation)
+    processed_implemented_functions[func_obj.name] = c_implementation
 
 
 def convert_booleans(c_code):

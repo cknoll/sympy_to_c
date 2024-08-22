@@ -3,7 +3,6 @@
 
 """Tests for `sympy_to_c` package."""
 
-
 import unittest
 import sympy as sp
 from sympy.utilities.codegen import codegen
@@ -268,7 +267,17 @@ class TestSympy_to_c(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             func_c = sp2c.convert_to_c((x1, k), expr)
 
-        return
+
+        counter_start_func.c_implementation = """
+
+        double counter_start_func(double counter_k_start, double k, double counter_index_state, double i, double initial_value) {
+           double result;
+            result = 123;
+            return result;
+        }
+        """
+        expr = counter_start_func(x1, k, x1, 2, 0.0790139064475348*x1*pw_expr)
+
 
 
         xx = np.linspace(-1, 1, 500)
