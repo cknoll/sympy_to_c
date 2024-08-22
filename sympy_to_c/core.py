@@ -52,6 +52,8 @@ created_so_files = []
 # format: {"<so-path>": handle}
 loaded_so_files = {}
 
+processed_implemented_functions = {}
+
 # create a function to unload a lib
 # this is from https://stackoverflow.com/a/50986803/333403
 dlclose_func = ct.CDLL(None).dlclose
@@ -302,6 +304,8 @@ def _generate_c_code(args, expr_matrix, basename, libname, shape, md=None):
     for i, j in idcs:
         tmp_expr = expr_matrix[i, j]
 
+        process_implemented_functions(tmp_expr)
+
         part_func_name = _get_c_func_name(basename, i, j)
 
         c_res = codegen((part_func_name, tmp_expr), "C", "test",
@@ -333,6 +337,25 @@ def _generate_c_code(args, expr_matrix, basename, libname, shape, md=None):
 
     with open(libname, "w") as c_file:
         c_file.write(final_code)
+
+
+def process_implemented_functions(expr) -> None:
+    """
+    Sympy allows custom symbolic functions which can have a python implementation.
+
+    This function deals with converting those object to C (if they have a certain attributes)
+    """
+
+    custom_functions = expr.atoms(sp.core.function.AppliedUndef)
+    for cf in custom_functions:
+        _process_implemented_function(cf)
+
+def _process_implemented_function(applied_func_obj):
+    func_obj = type(applied_func_obj)
+
+    if c_implementation := getattr(func_obj, "c_implementation", None) is None:
+        msg = f"Applied function of type `{func_obj.name}` without specified C implementation"
+        raise NotImplementedError(msg)
 
 
 def convert_booleans(c_code):
@@ -513,7 +536,7 @@ def _find_dicts_in_obj(obj):
 
     return all_dicts
 
-def reproducible_pickle_repr(expr):
+def reproducible_pickle_repr(expr) -> bytes:
     """
 
     :param expr:    sympy matrix (containing the relevant expression(s))
@@ -527,7 +550,12 @@ def reproducible_pickle_repr(expr):
     if isinstance(expr, sp.MatrixBase):
         expr = sp.ImmutableDenseMatrix(expr)
 
-    pickle_dump = pickle.dumps(expr)
+    try:
+        pickle_dump = pickle.dumps(expr)
+    except pickle.PickleError:
+        # TODO: print warning (e.g. long runtime of str. representation)
+        # TODO test dill with custom functions
+        pickle_dump = repr(expr).encode("utf8")
 
     return pickle_dump
 

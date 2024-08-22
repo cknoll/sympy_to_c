@@ -7,6 +7,9 @@
 import unittest
 import sympy as sp
 from sympy.utilities.codegen import codegen
+from sympy.utilities.lambdify import implemented_function
+from sympy import Piecewise, Abs, ITE
+
 import numpy as np
 import os
 import sys
@@ -231,7 +234,6 @@ class TestSympy_to_c(unittest.TestCase):
             self.assertEqual(r4[i], 0)
 
     def test_07__boolean_expression(self):
-        from sympy import Piecewise, Abs, ITE
 
         x3, x4 = sp.symbols("x3, x4")
         expr = Piecewise((-1, x3 < 0), (1, True))*Piecewise((0, ITE(x3 < 0, Abs(x3) < 0.3, False)), ((-Piecewise((0.3, x3 < 0), (0, True)) + Abs(x3))/(0.95 - Piecewise((0.3, x3 < 0), (0, True))), Abs(x3) < 0.95), (1, True))
@@ -248,7 +250,33 @@ class TestSympy_to_c(unittest.TestCase):
             plt.plot(xx, yy_lmd)
             plt.plot(xx, yy_c + .1, "--")
             plt.show()
-        np.allclose(yy_lmd - yy_c, 0)
+        self.assertTrue(np.allclose(yy_lmd - yy_c, 0))
+
+    def test_08__custom_function(self):
+
+        x1, k = sp.symbols("x1, k")
+
+        pw_expr = Piecewise((1.4, (Abs(0.1*k - 22.5) < 0.001) | (Abs(0.1*k - 5) < 0.001)), (0, True))
+
+        # motivated by special use case
+        def counter_start_func_imp(counter_k_start, k, counter_index_state, i, initial_value):
+            return 1
+
+        counter_start_func = implemented_function(f"counter_start_func", counter_start_func_imp)
+        expr = counter_start_func(x1, k, x1, 2, 0.0790139064475348*x1*pw_expr)
+
+        with self.assertRaises(NotImplementedError):
+            func_c = sp2c.convert_to_c((x1, k), expr)
+
+        return
+
+
+        xx = np.linspace(-1, 1, 500)
+        func_lmd = sp.lambdify((x1, k), expr)
+        yy_lmd = np.array([func_lmd(x, 23) for x in xx])
+
+        func_c = sp2c.convert_to_c((x1, k), expr)
+        yy_c = np.array([func_c(x, 23) for x in xx])
 
 
 def main():
