@@ -409,7 +409,12 @@ class ReplacedArgument:
         self.c_code = _generate_c_code_of_function(func_name, expr, self.args)
 
         # will be something like aux_0(x1, x2)
-        self.call_str = f"{func_name}{repr(tuple(self.args))}"
+
+        if len(self.args) == 1:
+            pass
+            self.call_str = f"{func_name}({tuple(self.args)[0]})"
+        else:
+            self.call_str = f"{func_name}{repr(tuple(self.args))}"
 
 
 def _handle_aux_funcs_for_complex_args(func_obj) -> None:

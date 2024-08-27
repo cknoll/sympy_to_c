@@ -61,6 +61,38 @@ class TestSympy_to_c(unittest.TestCase):
             print("deleting", so_file_path)
             os.remove(so_file_path)
 
+    def _define_custom_function(self):
+        """
+        Define a custom function which might be used in several use cases
+        """
+
+        x1, k = sp.symbols("x1, k")
+
+        # separate piecewise expression for better maintainability
+        pw_expr = Piecewise((1.4, (Abs(0.1*k - 22.5) < 0.001) | (Abs(0.1*k - 5) < 0.001)), (0, True))
+
+        # motivated by special use case
+        def counter_start_func_imp(counter_k_start, k, counter_index_state, i, initial_value):
+            return counter_k_start*2.5
+
+        counter_start_func = implemented_function(f"counter_start_func", counter_start_func_imp)
+        expr = counter_start_func(x1, k, x1, 2, 0.0790139064475348*x1*pw_expr)
+
+        with self.assertRaises(NotImplementedError):
+            func_c = sp2c.convert_to_c((x1, k), expr)
+
+
+        counter_start_func.c_implementation = """
+
+        double counter_start_func(double counter_k_start, double k, double counter_index_state, double i, double initial_value) {
+           double result;
+            result = counter_k_start*2.5;
+            return result;
+        }
+        """
+
+        return counter_start_func, (x1, k, pw_expr)
+
     def test_01__scalar_expression(self):
         """Test conversion of simple scalar expression."""
 
@@ -253,42 +285,18 @@ class TestSympy_to_c(unittest.TestCase):
 
     def test_08__custom_function(self):
 
-        x1, k = sp.symbols("x1, k")
-
-        # separate piecewise expression for better maintainability
-        pw_expr = Piecewise((1.4, (Abs(0.1*k - 22.5) < 0.001) | (Abs(0.1*k - 5) < 0.001)), (0, True))
-
-        # motivated by special use case
-        def counter_start_func_imp(counter_k_start, k, counter_index_state, i, initial_value):
-            return counter_k_start*2.5
-
-        counter_start_func = implemented_function(f"counter_start_func", counter_start_func_imp)
+        counter_start_func, (x1, k, pw_expr) = self._define_custom_function()
         expr = counter_start_func(x1, k, x1, 2, 0.0790139064475348*x1*pw_expr)
-
-        with self.assertRaises(NotImplementedError):
-            func_c = sp2c.convert_to_c((x1, k), expr)
-
-
-        counter_start_func.c_implementation = """
-
-        double counter_start_func(double counter_k_start, double k, double counter_index_state, double i, double initial_value) {
-           double result;
-            result = counter_k_start*2.5;
-            return result;
-        }
-        """
-        expr = counter_start_func(x1, k, x1, 2, 0.0790139064475348*x1*pw_expr)
-
-        sp2c.core.CLEANUP = False
-        # sp2c.convert_to_c((x1, k), expr.args[-1])
-        sp2c.convert_to_c((x1, k), expr)
 
         xx = np.linspace(-1, 1, 500)
-        func_lmd = sp.lambdify((x1, k), expr)
-        yy_lmd = np.array([func_lmd(x, 23) for x in xx])
 
+        # useful for debugging
+        # sp2c.core.CLEANUP = False
         func_c = sp2c.convert_to_c((x1, k), expr)
         yy_c = np.array([func_c(x, 23) for x in xx])
+
+        func_lmd = sp.lambdify((x1, k), expr)
+        yy_lmd = np.array([func_lmd(x, 23) for x in xx])
 
         self.assertTrue(np.allclose(yy_lmd - yy_c, 0))
 
